@@ -1,0 +1,9 @@
+# Configuração do Worker. Os segredos (ANTHROPIC_API_KEY e CODIGO_ACESSO)
+# NÃO ficam aqui: são cadastrados no painel da Cloudflare.
+name = "foto-nota-bar"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true

@@ -9,3 +9,7 @@ App de anotação do balcão: substitui o caderno de contas. Uma tela só, imita
 Regra que manda em tudo: lançar um item em no máximo 3 toques.
 
 Publicado pelo GitHub Pages a partir da branch `main`: https://centrodacoroa.github.io/controle-bar/
+
+## Foto da nota
+
+Em "Chegou mercadoria", o botão **📷 Foto da nota** manda a foto para um servidor próprio (`servidor-foto/`, um Cloudflare Worker), que lê a nota com a API do Claude e abre a tela de conferência já preenchida. Como publicar o servidor: [`servidor-foto/COMO-PUBLICAR.md`](servidor-foto/COMO-PUBLICAR.md).

@@ -83,6 +83,16 @@ a.btn{display:block;text-align:center;text-decoration:none}
 .nota{font-size:13px;color:#777;margin:6px 0}
 .mv{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #eee;font-size:14px}.mv span{flex:1}
 .dif{border-radius:10px;padding:10px;margin:8px 0;font-size:15px;background:#e3f1e8;color:#1f5c3a}.dif.ruim{background:#fbe3e1;color:#7a1712}
+.kc{background:#fff;border:2px solid #e4e4de;border-radius:12px;padding:8px 10px;margin:8px 0}
+.kc.feito{border-color:#1f5c3a;background:#eef7f1}
+.kc .kn{font-size:16px;font-weight:700}.kc .kn small{font-weight:400;color:#888;font-size:13px}
+.kc .kb{display:grid;grid-template-columns:64px 1fr 64px 64px;gap:6px;margin-top:6px}
+.kc .kb button{border:0;border-radius:12px;font-size:30px;font-weight:800;height:56px;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.kc .kb .km{background:#fbe3e1;color:#b3261e}.kc .kb .kp{background:#d7eadf;color:#1f5c3a}
+.kc .kb .kk{background:#eee;color:#999;font-size:24px}.kc.feito .kb .kk{background:#1f5c3a;color:#fff}
+.cx .kc .kb input{height:56px;font-size:26px;font-weight:800;text-align:center;padding:4px}
+.foto{width:100%;font-size:20px!important;padding:18px 6px!important;margin:6px 0 4px}
+.espera{text-align:center;font-size:18px;padding:22px 10px}
 </style>
 </head>
 <body>
@@ -291,12 +301,14 @@ function renderProdutos(){
    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
     <button class="btn b4" id="dBk">Enviar backup</button>
     <button class="btn b1" id="dRest">Restaurar backup</button>
-    <button class="btn b1" id="dPin" style="grid-column:1/3">Trocar PIN</button></div>
+    <button class="btn b1" id="dPin">Trocar PIN</button>
+    <button class="btn b1" id="dFoto">📷 Config. foto</button></div><div id="eForm"></div>
    <input type="file" id="dArq" accept=".json,application/json" style="display:none">`);
   $('#dBk').onclick=enviarBackup;
   $('#dRest').onclick=()=>$('#dArq').click();
   $('#dArq').onchange=e=>{const f=e.target.files[0];if(f)restaurar(f)};
   $('#dPin').onclick=()=>{try{localStorage.removeItem(PINK)}catch(e){}pedirPin()};
+  $('#dFoto').onclick=()=>{formFotoCfg(false);$('#eForm').scrollIntoView({behavior:'smooth'})};
 }
 
 /* ----- backup: arquivo .json com tudo (produtos + histórico completo) ----- */
@@ -342,7 +354,8 @@ async function pedirPin(){
     toast('PIN criado');return true}
   const p=prompt('PIN do dono:');if(p===null)return false;
   if(await hashPin(p)===salvo)return true;toast('PIN errado');return false}
-$('#bDono').onclick=async()=>{if(!await pedirPin())return;$('#dono').classList.add('on');renderDono()};
+$('#bDono').onclick=async()=>{if(!await pedirPin())return;$('#dono').classList.add('on');renderDono();
+  if(fotoPend){const d=fotoPend;fotoPend=null;abrirEntrada(d,true)}};
 /* ===== ESTOQUE (só na área do dono; o balcão não muda nada) =====
  mov = [{id,tipo:'compra'|'contagem',p,q,custo?,calc?,t}]
  Estoque de um produto = última contagem + compras depois dela − vendido depois dela.
@@ -393,6 +406,9 @@ function renderEstoque(){
 }
 function formCompra(){
   $('#eForm').innerHTML=`<div class="cx"><b>Chegou mercadoria</b>
+   <button class="btn b4 foto" id="cFoto">📷 Foto da nota</button>
+   <input type="file" id="cArq" accept="image/*" capture="environment" style="display:none">
+   <p class="nota" style="text-align:center">ou lance um produto por vez:</p>
    <label>Produto</label><select id="cP">${produtos.map(p=>`<option value="${p.id}">${esc((p.e||'')+' '+p.nome)}</option>`).join('')}</select>
    <label>Quantas unidades chegaram</label><input id="cQ" inputmode="numeric" placeholder="ex.: 48 (2 fardos de 24)">
    <label>Quanto pagou no total (opcional)</label><input id="cV" inputmode="decimal" placeholder="R$">
@@ -404,22 +420,40 @@ function formCompra(){
     const p=produtos.find(x=>x.id===$('#cP').value);
     const m={id:uid(),tipo:'compra',p:p.id,q,t:Date.now()};if(v>0){m.custo=v;p.custo=v/q}
     mov.push(m);ultimaDif=null;salvar();renderEstoque();toast(`+${q} ${p.nome}`)};
-  $('#cQ').focus();
+  $('#cFoto').onclick=()=>{if(!fotoCfg()){formFotoCfg(true);return}$('#cArq').click()};
+  $('#cArq').onchange=e=>{const f=e.target.files[0];if(f)lerFoto(f)};
 }
 function formContagem(){
-  $('#eForm').innerHTML=`<div class="cx"><b>Contagem</b><p class="nota" style="margin-top:2px">Conte o que tem de verdade (geladeira + depósito) e escreva só nos produtos que contou. Deixe em branco o que não contou.</p>
-   ${produtos.map(p=>{const t=estoqueDe(p.id);return `<label>${esc((p.e||'')+' '+p.nome)}${t!==null?` <span style="color:#aaa">(app diz ${t})</span>`:''}</label><input data-cp="${p.id}" inputmode="numeric">`}).join('')}
+  $('#eForm').innerHTML=`<div class="cx"><b>Contagem</b><p class="nota" style="margin-top:2px">Conte o que tem de verdade (geladeira + depósito). Toque <b>−</b> e <b>+</b> até chegar no que contou. Se o número já está certo, toque <b>✓</b>. Produto que não contou fica cinza e não é salvo.</p>
+   ${produtos.map(p=>{const t=estoqueDe(p.id);return `<div class="kc" data-cp="${p.id}"><div class="kn">${esc((p.e||'')+' '+p.nome)} <small>${t!==null?`(app diz ${t})`:'(ainda sem controle)'}</small></div>
+    <div class="kb"><button class="km" data-k="-1">−</button><input inputmode="numeric" value="${Math.max(0,t||0)}"><button class="kp" data-k="1">+</button><button class="kk" data-k="ok">✓</button></div></div>`}).join('')}
    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><button class="btn b1" id="kX">Cancelar</button><button class="btn b3" id="kOk">Salvar contagem</button></div></div>`;
+  const conta=()=>{const n=$('#eForm').querySelectorAll('.kc.feito').length;$('#kOk').textContent=n?`Salvar contagem (${n})`:'Salvar contagem'};
+  $('#eForm').querySelectorAll('.kc').forEach(row=>{
+    const inp=row.querySelector('input');
+    const passo=d=>{const v=Math.max(0,(parseInt(inp.value,10)||0)+d);inp.value=v;row.classList.add('feito');conta();if(navigator.vibrate)navigator.vibrate(10)};
+    row.querySelectorAll('[data-k]').forEach(b=>{
+      if(b.dataset.k==='ok'){b.onclick=()=>{row.classList.toggle('feito');conta()};return}
+      const d=+b.dataset.k;let t1=null,t2=null,repetiu=false;
+      const para=()=>{clearTimeout(t1);clearInterval(t2)};
+      b.onpointerdown=()=>{repetiu=false;para();t1=setTimeout(()=>{repetiu=true;t2=setInterval(()=>passo(d),110)},500)};
+      b.onpointerup=b.onpointerleave=b.onpointercancel=para;
+      b.oncontextmenu=e=>e.preventDefault();
+      b.onclick=()=>{if(repetiu){repetiu=false;return}passo(d)};
+    });
+    inp.oninput=()=>{inp.value=inp.value.replace(/\D/g,'');row.classList.toggle('feito',inp.value!=='');conta()};
+    inp.onfocus=()=>inp.select();
+  });
   $('#kX').onclick=()=>$('#eForm').innerHTML='';
   $('#kOk').onclick=()=>{
     const agora=Date.now(), difs=[];let n=0;
-    $('#eForm').querySelectorAll('[data-cp]').forEach(i=>{
-      if(i.value.trim()==='')return;const q=parseInt(i.value,10);if(isNaN(q)||q<0)return;
-      const p=produtos.find(x=>x.id===i.dataset.cp), calc=estoqueDe(p.id);
+    $('#eForm').querySelectorAll('.kc.feito').forEach(row=>{
+      const q=parseInt(row.querySelector('input').value,10);if(isNaN(q)||q<0)return;
+      const p=produtos.find(x=>x.id===row.dataset.cp), calc=estoqueDe(p.id);
       mov.push({id:uid(),tipo:'contagem',p:p.id,q,calc,t:agora});n++;
       if(calc!==null&&calc!==q)difs.push({p,d:q-calc});
     });
-    if(!n){toast('Nenhum número preenchido');return}
+    if(!n){toast('Nenhum produto contado');return}
     const falta=difs.filter(x=>x.d<0), valor=falta.reduce((s,x)=>s+(-x.d)*x.p.preco,0);
     ultimaDif=difs.length?`<div class="dif${falta.length?' ruim':''}"><b>Contagem salva.</b> ${falta.length?`Sumiram ${falta.map(x=>`${-x.d} ${esc(x.p.nome)}`).join(', ')}: <b>${brl(valor)}</b> no preço de venda (venda sem lançar, consumo, quebra ou erro de contagem).`:''}${difs.filter(x=>x.d>0).length?` Sobrou mais do que o app esperava em: ${difs.filter(x=>x.d>0).map(x=>`${esc(x.p.nome)} (+${x.d})`).join(', ')}, provavelmente compra não lançada.`:''}</div>`
       :`<div class="dif"><b>Contagem salva.</b> ${difs.length===0&&mov.filter(m=>m.tipo==='contagem').length>n?'Bateu certinho com o app.':'A partir de agora o app acompanha esses produtos.'}</div>`;
@@ -453,14 +487,13 @@ function lerEntrada(){
   try{const b=m[1].replace(/-/g,'+').replace(/_/g,'/');const txt=decodeURIComponent(escape(atob(b+'==='.slice((b.length+3)%4))));
     const d=JSON.parse(txt);return Array.isArray(d.itens)?d:null}catch(e){return null}
 }
-async function abrirEntrada(d){
-  history.replaceState(null,'',location.pathname);
-  if(!await pedirPin())return;
-  donoAba='estoque';$('#dono').classList.add('on');renderDono();
-  const linhas=d.itens.map((it,i)=>{const p=acharProduto(it.nome);
+async function abrirEntrada(d,dentro){
+  if(!dentro){history.replaceState(null,'',location.pathname);if(!await pedirPin())return}
+  if(!dentro||donoAba!=='estoque'||!$('#eForm')){donoAba='estoque';$('#dono').classList.add('on');renderDono()}
+  const linhas=d.itens.map((it,i)=>{const p=produtos.find(x=>x.id===it.p)||acharProduto(it.nome);
     return `<div style="border-bottom:1px solid #e7e2cf;padding:8px 0"><div style="font-size:14px;color:#666">Na nota: <b>${esc(it.nome)}</b></div>
      <select data-ei="${i}" style="margin-top:4px"><option value="">— não lançar —</option>${produtos.map(x=>`<option value="${x.id}"${p&&p.id===x.id?' selected':''}>${esc((x.e||'')+' '+x.nome)}</option>`).join('')}<option value="novo">+ criar produto "${esc(it.nome)}"</option></select>
-     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px"><input data-eq="${i}" inputmode="numeric" value="${+it.q||''}" placeholder="unidades"><input data-ev="${i}" inputmode="decimal" value="${it.custo?String(it.custo).replace('.',','):''}" placeholder="R$ total"></div></div>`}).join('');
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px"><label style="margin:0">Unidades<input data-eq="${i}" inputmode="numeric" value="${+it.q||''}" placeholder="unidades"></label><label style="margin:0">R$ total pago<input data-ev="${i}" inputmode="decimal" value="${it.custo?String(it.custo).replace('.',','):''}" placeholder="R$"></label></div></div>`}).join('');
   $('#eForm').innerHTML=`<div class="cx"><b>Conferir mercadoria da foto</b><p class="nota" style="margin-top:2px">Confira se o produto e a quantidade em <b>unidades</b> estão certos (fardo de 12 = 12). Só entra no estoque quando tocar em Confirmar.</p>${linhas}
    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><button class="btn b1" id="iX">Cancelar</button><button class="btn b3" id="iOk">Confirmar entrada</button></div></div>`;
   $('#iX').onclick=()=>$('#eForm').innerHTML='';
@@ -476,6 +509,68 @@ async function abrirEntrada(d){
     salvar();renderEstoque();toast('Entrada lançada')};
 }
 {const d=lerEntrada();if(d)setTimeout(()=>abrirEntrada(d),300)}
+
+/* ===== FOTO DA NOTA =====
+ Tira a foto, reduz no celular e manda para o servidor da foto (servidor-foto/, Cloudflare Worker),
+ que lê a nota com o Claude e devolve {itens:[{nome,q,custo,p}]}. Depois cai na conferência acima.
+ Endereço e código ficam em localStorage 'bar_foto' (fora do bar_v2; não vai no backup). */
+const FOTOK='bar_foto';
+let fotoPend=null;
+const fotoCfg=()=>{try{const c=JSON.parse(localStorage.getItem(FOTOK)||'null');return c&&c.u&&c.c?c:null}catch(e){return null}};
+function formFotoCfg(depoisFoto){
+  const c=fotoCfg()||{u:'',c:''};
+  $('#eForm').innerHTML=`<div class="cx"><b>📷 Configurar foto da nota</b><p class="nota" style="margin-top:2px">Só precisa fazer uma vez neste celular.</p>
+   <label>Endereço do servidor</label><input id="fU" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="foto-nota-bar.seunome.workers.dev" value="${esc(c.u.replace(/^https:\/\//,''))}">
+   <label>Código de acesso</label><input id="fC" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(c.c)}">
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><button class="btn b1" id="fX">Cancelar</button><button class="btn b3" id="fOk">Salvar</button></div></div>`;
+  $('#fX').onclick=()=>{$('#eForm').innerHTML=''};
+  $('#fOk').onclick=()=>{
+    let u=$('#fU').value.trim().replace(/\s/g,'').replace(/\/+$/,''), k=$('#fC').value.trim();
+    if(!u||!k){toast('Preencha os dois');return}
+    if(!/^https?:\/\//i.test(u))u='https://'+u;
+    try{localStorage.setItem(FOTOK,JSON.stringify({u,c:k}))}catch(e){}
+    toast('Foto configurada');
+    if(depoisFoto&&$('#eForm'))formCompra();else if(donoAba==='produtos')renderDono();else $('#eForm').innerHTML='';
+  };
+}
+async function reduzirFoto(f){
+  const url=URL.createObjectURL(f);
+  try{
+    const img=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=url});
+    const M=2000,s=Math.min(1,M/Math.max(img.naturalWidth,img.naturalHeight));
+    const cv=document.createElement('canvas');cv.width=Math.round(img.naturalWidth*s);cv.height=Math.round(img.naturalHeight*s);
+    cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+    return cv.toDataURL('image/jpeg',0.8).split(',')[1];
+  }finally{URL.revokeObjectURL(url)}
+}
+function fotoErro(txt,cfg){
+  if(!$('#eForm'))return;
+  $('#eForm').innerHTML=`<div class="cx"><div class="aviso" style="margin:0 0 10px">${txt}</div>
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn b1" id="fvX">Voltar</button><button class="btn b4" id="fvF">${cfg?'Arrumar configuração':'📷 Tirar outra'}</button></div></div>`;
+  $('#fvX').onclick=()=>{$('#eForm').innerHTML=''};
+  $('#fvF').onclick=()=>{if(cfg)formFotoCfg(true);else{formCompra();$('#cArq').click()}};
+}
+async function lerFoto(f){
+  const cfg=fotoCfg();if(!cfg){formFotoCfg(true);return}
+  $('#eForm').innerHTML=`<div class="cx espera">⏳ <b>Lendo a nota…</b><br><span class="nota">Pode levar até 1 minuto. Não feche o app.</span></div>`;
+  let r,d;
+  try{
+    const imagem=await reduzirFoto(f);
+    const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),100000);
+    try{
+      r=await fetch(cfg.u,{method:'POST',signal:ctl.signal,headers:{'Content-Type':'application/json','X-Codigo':cfg.c},
+        body:JSON.stringify({imagem,tipo:'image/jpeg',produtos:produtos.map(p=>({id:p.id,nome:p.nome}))})});
+      d=await r.json().catch(()=>({}));
+    }finally{clearTimeout(tm)}
+  }catch(e){
+    fotoErro(e&&e.name==='AbortError'?'Demorou demais. Tente de novo.':(navigator.onLine===false?'Sem internet. A foto precisa de internet: tente quando voltar o sinal.':'Não consegui falar com o servidor da foto. Confira a internet e o endereço.'),!navigator.onLine?false:e&&e.name!=='AbortError');
+    return}
+  if(!r.ok){fotoErro((d&&d.erro)||'Erro no servidor da foto.',r.status===401||r.status===403||r.status===404);return}
+  const itens=(d.itens||[]).filter(x=>x&&x.nome);
+  if(!itens.length){fotoErro('Não achei produtos na foto. Tire outra, de perto, reta e com luz.',false);return}
+  if(!$('#dono').classList.contains('on')){fotoPend={itens};toast('Nota lida: abra a área do dono para conferir');return}
+  abrirEntrada({itens},true);
+}
 
 setInterval(()=>{if(hoje()!==dia&&!aberta)render()},60000);
 render();
