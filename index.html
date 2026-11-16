@@ -71,6 +71,18 @@ button{font-family:inherit}
 .res-dia .l{display:flex;justify-content:space-between;border-bottom:1px solid #f0f0f0;padding:4px 0}
 .res-dia .big{font-size:22px;font-weight:800}
 a.btn{display:block;text-align:center;text-decoration:none}
+.abas{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px 12px 0}
+.abas button{border:0;border-radius:10px;padding:10px;font-size:15px;font-weight:700;background:#eee;color:#555}
+.abas button.on{background:#1f5c3a;color:#fff}
+.est{width:100%;border-collapse:collapse;font-size:15px}.est th{font-size:12px;color:#888;text-transform:uppercase;text-align:right;padding:4px 6px;font-weight:600}
+.est th:first-child,.est td:first-child{text-align:left}.est td{padding:9px 6px;border-bottom:1px solid #eee;text-align:right}
+.est .bx{color:#b3261e;font-weight:700}.est .ok{color:#1f5c3a}.est .nd{color:#aaa}
+.cx{background:#f6f3e6;border-radius:12px;padding:12px;margin:10px 0}
+.cx label{display:block;font-size:13px;color:#666;margin:6px 0 2px}
+.cx select,.cx input{width:100%;font-size:17px;padding:10px;border:1px solid #ccc;border-radius:10px;background:#fff}
+.nota{font-size:13px;color:#777;margin:6px 0}
+.mv{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #eee;font-size:14px}.mv span{flex:1}
+.dif{border-radius:10px;padding:10px;margin:8px 0;font-size:15px;background:#e3f1e8;color:#1f5c3a}.dif.ruim{background:#fbe3e1;color:#7a1712}
 </style>
 </head>
 <body>
@@ -96,7 +108,8 @@ a.btn{display:block;text-align:center;text-decoration:none}
 </div></div>
 
 <div class="sheet" id="dono"><div class="panel">
-  <div class="ph"><h2>Produtos e preços</h2></div>
+  <div class="ph"><h2>Área do dono</h2></div>
+  <div class="abas"><button data-aba="estoque">Estoque</button><button data-aba="produtos">Produtos e preços</button></div>
   <div class="pb dono" id="dBody"></div>
   <div class="pf" style="grid-template-columns:1fr 1fr"><button class="b1" id="dVolta">Fechar</button><button class="b3" id="dAdd">+ Produto</button></div>
 </div></div>
@@ -122,15 +135,15 @@ let produtos=[
  {id:'p4',e:'💧',nome:'Água',preco:3},{id:'p5',e:'🥟',nome:'Coxinha',preco:7},{id:'p6',e:'🍟',nome:'Salgadinho',preco:5},
  {id:'p7',e:'🍬',nome:'Bala',preco:0.5},{id:'p8',e:'🍫',nome:'Chocolate',preco:4},{id:'p9',e:'🍦',nome:'Sorvete',preco:8},
  {id:'p10',e:'🍭',nome:'Pirulito',preco:1},{id:'p11',e:'⚡',nome:'Energético',preco:10},{id:'p12',e:'🌭',nome:'Cachorro-quente',preco:9}];
-let contas=[], aberta=null, db=null, ultimo=null, ultimoT=0, verDevendo=false;
+let contas=[], mov=[], aberta=null, db=null, ultimo=null, ultimoT=0, verDevendo=false;
 let dia=hoje();
 
 const LS='bar_v2';
-function salvarLocal(){try{localStorage.setItem(LS,JSON.stringify({produtos,contas}))}catch(e){}}
-function carregarLocal(){try{const s=JSON.parse(localStorage.getItem(LS)||'null');if(s){produtos=s.produtos||produtos;contas=s.contas||[]}}catch(e){}}
+function salvarLocal(){try{localStorage.setItem(LS,JSON.stringify({produtos,contas,mov}))}catch(e){}}
+function carregarLocal(){try{const s=JSON.parse(localStorage.getItem(LS)||'null');if(s){produtos=s.produtos||produtos;contas=s.contas||[];mov=s.mov||[]}}catch(e){}}
 let tmr=null;
 function salvar(){salvarLocal();if(!db)return;clearTimeout(tmr);tmr=setTimeout(()=>{
-  db.collection('bar').doc('estado').set({json:JSON.stringify({produtos,contas}),t:Date.now()}).catch(()=>{});
+  db.collection('bar').doc('estado').set({json:JSON.stringify({produtos,contas,mov}),t:Date.now()}).catch(()=>{});
 },500)}
 carregarLocal();
 
@@ -268,7 +281,7 @@ $('#bResumo').onclick=abrirResumo;
 $('#rVolta').onclick=()=>$('#resumo').classList.remove('on');
 
 /* ----- área do dono ----- */
-function renderDono(){
+function renderProdutos(){
   $('#dBody').innerHTML=`<p style="color:#666;font-size:14px">Mudar preço não altera o que já foi lançado.</p><table>${produtos.map((p,i)=>`<tr><td style="width:50px"><input data-i="${i}" data-k="e" value="${esc(p.e||'')}"></td><td><input data-i="${i}" data-k="nome" value="${esc(p.nome)}"></td><td style="width:90px"><input data-i="${i}" data-k="preco" inputmode="decimal" value="${p.preco.toFixed(2).replace('.',',')}"></td><td style="width:40px"><button class="b2" style="border:0;border-radius:8px;padding:8px" data-x="${i}">✕</button></td></tr>`).join('')}</table>`;
   $('#dBody').querySelectorAll('input').forEach(inp=>inp.onchange=()=>{const p=produtos[inp.dataset.i];
     if(inp.dataset.k==='preco'){const v=parseFloat(inp.value.replace(',','.'));if(!isNaN(v))p.preco=v}else p[inp.dataset.k]=inp.value.trim();salvar();toast('Salvo')});
@@ -291,7 +304,7 @@ const BKK='bar_ultimo_backup';
 const ultimoBk=()=>{try{return localStorage.getItem(BKK)}catch(e){return null}};
 async function enviarBackup(){
   const nome='bar-backup-'+hoje()+'.json';
-  const txt=JSON.stringify({app:'controle-bar',versao:2,gerado:new Date().toISOString(),produtos,contas});
+  const txt=JSON.stringify({app:'controle-bar',versao:3,gerado:new Date().toISOString(),produtos,contas,mov});
   const arq=new File([txt],nome,{type:'application/json'});
   const marca=()=>{try{localStorage.setItem(BKK,new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))}catch(e){}if($('#dono').classList.contains('on'))renderDono()};
   try{
@@ -306,13 +319,13 @@ function restaurar(f){
     const s=JSON.parse(r.result);if(s.app!=='controle-bar'||!Array.isArray(s.contas))throw 0;
     if(!confirm(`Restaurar backup de ${new Date(s.gerado).toLocaleString('pt-BR')}?\n${s.contas.length} contas. O que está no celular agora será substituído.`))return;
     salvarCopiaSeguranca();
-    contas=s.contas;produtos=s.produtos||produtos;salvar();renderDono();render();toast('Backup restaurado');
+    contas=s.contas;produtos=s.produtos||produtos;mov=s.mov||[];salvar();renderDono();render();toast('Backup restaurado');
   }catch(e){toast('Arquivo de backup inválido')}};
   r.readAsText(f);
 }
 /* cópia automática no próprio celular: guarda o estado de antes de cada dia novo (últimos 7) */
 function salvarCopiaSeguranca(){try{
-  const k='bar_copia_'+hoje();localStorage.setItem(k,JSON.stringify({produtos,contas}));
+  const k='bar_copia_'+hoje();localStorage.setItem(k,JSON.stringify({produtos,contas,mov}));
   Object.keys(localStorage).filter(x=>x.startsWith('bar_copia_')).sort().slice(0,-7).forEach(x=>localStorage.removeItem(x));
 }catch(e){}}
 $('#rBk').onclick=enviarBackup;
@@ -330,8 +343,139 @@ async function pedirPin(){
   const p=prompt('PIN do dono:');if(p===null)return false;
   if(await hashPin(p)===salvo)return true;toast('PIN errado');return false}
 $('#bDono').onclick=async()=>{if(!await pedirPin())return;$('#dono').classList.add('on');renderDono()};
-$('#dVolta').onclick=()=>{$('#dono').classList.remove('on');render()};
+/* ===== ESTOQUE (só na área do dono; o balcão não muda nada) =====
+ mov = [{id,tipo:'compra'|'contagem',p,q,custo?,calc?,t}]
+ Estoque de um produto = última contagem + compras depois dela − vendido depois dela.
+ Produto sem nenhuma compra/contagem fica "não controlado" (mostra —). */
+let donoAba='estoque', ultimaDif=null;
+function vendidos(pid,desde){let n=0;contas.forEach(c=>c.itens.forEach(i=>{if(i.p===pid&&i.t>desde)n++}));return n}
+function estoqueDe(pid){
+  const ms=mov.filter(m=>m.p===pid);if(!ms.length)return null;
+  const cont=ms.filter(m=>m.tipo==='contagem').sort((a,b)=>b.t-a.t)[0];
+  const desde=cont?cont.t:0, base=cont?cont.q:0;
+  const ent=ms.filter(m=>m.tipo==='compra'&&m.t>desde).reduce((x,m)=>x+m.q,0);
+  return base+ent-vendidos(pid,desde);
+}
+const diasMov=()=>[...new Set(contas.filter(c=>c.itens.length).map(c=>c.dia))].sort().slice(-4);
+function mediaDia(pid,ds){if(!ds.length)return 0;let n=0;contas.forEach(c=>{if(ds.includes(c.dia))c.itens.forEach(i=>{if(i.p===pid)n++})});return n/ds.length}
+const fmtQ=v=>(Math.round(v*10)/10).toString().replace('.',',');
+function renderEstoque(){
+  const ds=diasMov();
+  const linhas=produtos.map(p=>{
+    const tem=estoqueDe(p.id), m=mediaDia(p.id,ds);
+    if(tem===null)return {p,tem,m,dura:null,comprar:null};
+    const dura=m>0?tem/m:null, comprar=m>0?Math.max(0,Math.ceil(m*1.2-tem)):0;
+    return {p,tem,m,dura,comprar};
+  });
+  const ctl=linhas.filter(l=>l.tem!==null).sort((a,b)=>(a.dura??1e9)-(b.dura??1e9));
+  const nao=linhas.filter(l=>l.tem===null);
+  const lista=ctl.filter(l=>l.comprar>0);
+  let h='';
+  if(ultimaDif)h+=ultimaDif;
+  h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn b3" id="eCompra">+ Chegou mercadoria</button><button class="btn b1" id="eCont">Fazer contagem</button></div><div id="eForm"></div>`;
+  if(ctl.length){
+    h+=`<table class="est" style="margin-top:12px"><tr><th>Produto</th><th>Tem</th><th>Dá p/</th><th>Comprar</th></tr>${ctl.map(l=>{
+      const baixo=l.tem<=0||(l.dura!==null&&l.dura<1);
+      return `<tr><td>${esc((l.p.e||'')+' '+l.p.nome)}</td><td class="${l.tem<0?'bx':''}">${l.tem}</td><td class="${baixo?'bx':'ok'}">${l.dura===null?'<span class="nd">—</span>':fmtQ(l.dura)+' dia'+(l.dura>=2?'s':'')}</td><td>${l.comprar?'<b>'+l.comprar+'</b>':'<span class="nd">0</span>'}</td></tr>`}).join('')}</table>`;
+    h+=`<p class="nota">"Dá p/" = quantos dias de jogo o estoque aguenta, pela média dos ${ds.length?`últimos ${ds.length} dia(s) com venda`:'dias com venda (ainda não tem)'}. "Comprar" cobre o próximo dia de jogo com 20% de folga.${ds.length<4?' <b>Com menos de 4 dias de histórico é só uma estimativa.</b>':''} Número negativo em "Tem" = vendeu mais do que entrou: falta lançar compra ou fazer contagem.</p>`;
+    if(lista.length){const t=`*Lista de compra - ${new Date().toLocaleDateString('pt-BR')}*\n`+lista.map(l=>`${l.comprar}x ${l.p.nome} (tem ${l.tem})`).join('\n');
+      h+=`<a class="btn b4" style="margin:8px 0" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(t)}">Mandar lista de compra no WhatsApp</a>`}
+  }else h+=`<p class="nota" style="margin-top:12px">Nenhum produto controlado ainda. Comece com <b>Fazer contagem</b> (conta o que tem na geladeira e no depósito) ou lance a próxima mercadoria que chegar.</p>`;
+  if(nao.length&&ctl.length)h+=`<p class="nota">Sem controle: ${nao.map(l=>esc(l.p.nome)).join(', ')}.</p>`;
+  const ult=[...mov].sort((a,b)=>b.t-a.t).slice(0,12);
+  if(ult.length)h+=`<h3 style="margin:18px 0 4px;font-size:14px;color:#888;text-transform:uppercase">Últimos lançamentos</h3>`+ult.map(m=>{const p=produtos.find(x=>x.id===m.p);
+    const d=new Date(m.t).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+    const txt=m.tipo==='compra'?`Chegou ${m.q} ${esc(p?p.nome:'(produto apagado)')}${m.custo?' · '+brl(m.custo):''}`:`Contagem: ${m.q} ${esc(p?p.nome:'(produto apagado)')}${m.calc!=null&&m.calc!==m.q?` (app dizia ${m.calc})`:''}`;
+    return `<div class="mv"><span>${d} · ${txt}</span><button class="b2" style="border:0;border-radius:8px;padding:6px 10px" data-mx="${m.id}">✕</button></div>`}).join('');
+  $('#dBody').innerHTML=h;
+  $('#eCompra').onclick=formCompra;$('#eCont').onclick=formContagem;
+  $('#dBody').querySelectorAll('[data-mx]').forEach(b=>b.onclick=()=>{if(!b.dataset.ok){b.dataset.ok=1;b.textContent='apagar?';return}mov=mov.filter(m=>m.id!==b.dataset.mx);salvar();renderEstoque();toast('Lançamento apagado')});
+}
+function formCompra(){
+  $('#eForm').innerHTML=`<div class="cx"><b>Chegou mercadoria</b>
+   <label>Produto</label><select id="cP">${produtos.map(p=>`<option value="${p.id}">${esc((p.e||'')+' '+p.nome)}</option>`).join('')}</select>
+   <label>Quantas unidades chegaram</label><input id="cQ" inputmode="numeric" placeholder="ex.: 48 (2 fardos de 24)">
+   <label>Quanto pagou no total (opcional)</label><input id="cV" inputmode="decimal" placeholder="R$">
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><button class="btn b1" id="cX">Cancelar</button><button class="btn b3" id="cOk">Salvar</button></div></div>`;
+  $('#cX').onclick=()=>$('#eForm').innerHTML='';
+  $('#cOk').onclick=()=>{
+    const q=parseInt($('#cQ').value,10), v=parseFloat(($('#cV').value||'').replace(/\./g,'').replace(',','.'));
+    if(!(q>0)){toast('Coloque a quantidade');return}
+    const p=produtos.find(x=>x.id===$('#cP').value);
+    const m={id:uid(),tipo:'compra',p:p.id,q,t:Date.now()};if(v>0){m.custo=v;p.custo=v/q}
+    mov.push(m);ultimaDif=null;salvar();renderEstoque();toast(`+${q} ${p.nome}`)};
+  $('#cQ').focus();
+}
+function formContagem(){
+  $('#eForm').innerHTML=`<div class="cx"><b>Contagem</b><p class="nota" style="margin-top:2px">Conte o que tem de verdade (geladeira + depósito) e escreva só nos produtos que contou. Deixe em branco o que não contou.</p>
+   ${produtos.map(p=>{const t=estoqueDe(p.id);return `<label>${esc((p.e||'')+' '+p.nome)}${t!==null?` <span style="color:#aaa">(app diz ${t})</span>`:''}</label><input data-cp="${p.id}" inputmode="numeric">`}).join('')}
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><button class="btn b1" id="kX">Cancelar</button><button class="btn b3" id="kOk">Salvar contagem</button></div></div>`;
+  $('#kX').onclick=()=>$('#eForm').innerHTML='';
+  $('#kOk').onclick=()=>{
+    const agora=Date.now(), difs=[];let n=0;
+    $('#eForm').querySelectorAll('[data-cp]').forEach(i=>{
+      if(i.value.trim()==='')return;const q=parseInt(i.value,10);if(isNaN(q)||q<0)return;
+      const p=produtos.find(x=>x.id===i.dataset.cp), calc=estoqueDe(p.id);
+      mov.push({id:uid(),tipo:'contagem',p:p.id,q,calc,t:agora});n++;
+      if(calc!==null&&calc!==q)difs.push({p,d:q-calc});
+    });
+    if(!n){toast('Nenhum número preenchido');return}
+    const falta=difs.filter(x=>x.d<0), valor=falta.reduce((s,x)=>s+(-x.d)*x.p.preco,0);
+    ultimaDif=difs.length?`<div class="dif${falta.length?' ruim':''}"><b>Contagem salva.</b> ${falta.length?`Sumiram ${falta.map(x=>`${-x.d} ${esc(x.p.nome)}`).join(', ')}: <b>${brl(valor)}</b> no preço de venda (venda sem lançar, consumo, quebra ou erro de contagem).`:''}${difs.filter(x=>x.d>0).length?` Sobrou mais do que o app esperava em: ${difs.filter(x=>x.d>0).map(x=>`${esc(x.p.nome)} (+${x.d})`).join(', ')}, provavelmente compra não lançada.`:''}</div>`
+      :`<div class="dif"><b>Contagem salva.</b> ${difs.length===0&&mov.filter(m=>m.tipo==='contagem').length>n?'Bateu certinho com o app.':'A partir de agora o app acompanha esses produtos.'}</div>`;
+    salvar();renderEstoque();toast('Contagem salva')};
+}
+function renderDono(){
+  document.querySelectorAll('#dono [data-aba]').forEach(b=>b.classList.toggle('on',b.dataset.aba===donoAba));
+  $('#dAdd').style.display=donoAba==='produtos'?'':'none';
+  $('#dono .pf').style.gridTemplateColumns=donoAba==='produtos'?'1fr 1fr':'1fr';
+  donoAba==='estoque'?renderEstoque():renderProdutos();
+}
+document.querySelectorAll('#dono [data-aba]').forEach(b=>b.onclick=()=>{donoAba=b.dataset.aba;renderDono()});
+$('#dVolta').onclick=()=>{$('#dono').classList.remove('on');ultimaDif=null;render()};
 $('#dAdd').onclick=()=>{produtos.push({id:uid(),e:'',nome:'Novo produto',preco:0});salvar();renderDono()};
+
+
+/* ===== ENTRADA PRONTA (lida de foto da nota/pedido) =====
+ Chega pelo link  ...#entrada=<base64url de {"itens":[{"nome":"Brahma lata","q":48,"custo":120}]}>
+ O dono só confere e confirma: nada entra no estoque sem o OK dele. */
+const normal=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+function acharProduto(nome){
+  const n=normal(nome);let melhor=null,pts=0;
+  produtos.forEach(p=>{const pn=normal(p.nome);if(!pn)return;
+    let s=0;if(n===pn)s=100;else if(n.includes(pn)||pn.includes(n))s=60;
+    else{const a=new Set(n.split(' ')),b=pn.split(' ');s=b.filter(w=>w.length>2&&a.has(w)).length*20}
+    if(s>pts){pts=s;melhor=p}});
+  return pts>=20?melhor:null;
+}
+function lerEntrada(){
+  const m=location.hash.match(/entrada=([A-Za-z0-9_-]+)/);if(!m)return null;
+  try{const b=m[1].replace(/-/g,'+').replace(/_/g,'/');const txt=decodeURIComponent(escape(atob(b+'==='.slice((b.length+3)%4))));
+    const d=JSON.parse(txt);return Array.isArray(d.itens)?d:null}catch(e){return null}
+}
+async function abrirEntrada(d){
+  history.replaceState(null,'',location.pathname);
+  if(!await pedirPin())return;
+  donoAba='estoque';$('#dono').classList.add('on');renderDono();
+  const linhas=d.itens.map((it,i)=>{const p=acharProduto(it.nome);
+    return `<div style="border-bottom:1px solid #e7e2cf;padding:8px 0"><div style="font-size:14px;color:#666">Na nota: <b>${esc(it.nome)}</b></div>
+     <select data-ei="${i}" style="margin-top:4px"><option value="">— não lançar —</option>${produtos.map(x=>`<option value="${x.id}"${p&&p.id===x.id?' selected':''}>${esc((x.e||'')+' '+x.nome)}</option>`).join('')}<option value="novo">+ criar produto "${esc(it.nome)}"</option></select>
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px"><input data-eq="${i}" inputmode="numeric" value="${+it.q||''}" placeholder="unidades"><input data-ev="${i}" inputmode="decimal" value="${it.custo?String(it.custo).replace('.',','):''}" placeholder="R$ total"></div></div>`}).join('');
+  $('#eForm').innerHTML=`<div class="cx"><b>Conferir mercadoria da foto</b><p class="nota" style="margin-top:2px">Confira se o produto e a quantidade em <b>unidades</b> estão certos (fardo de 12 = 12). Só entra no estoque quando tocar em Confirmar.</p>${linhas}
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><button class="btn b1" id="iX">Cancelar</button><button class="btn b3" id="iOk">Confirmar entrada</button></div></div>`;
+  $('#iX').onclick=()=>$('#eForm').innerHTML='';
+  $('#iOk').onclick=()=>{const agora=Date.now();let n=0;
+    d.itens.forEach((it,i)=>{let pid=$(`[data-ei="${i}"]`).value;const q=parseInt($(`[data-eq="${i}"]`).value,10);
+      const v=parseFloat(($(`[data-ev="${i}"]`).value||'').replace(/\./g,'').replace(',','.'));
+      if(!pid||!(q>0))return;
+      if(pid==='novo'){const np={id:uid(),e:'',nome:cap(String(it.nome).trim()),preco:0};produtos.push(np);pid=np.id}
+      const p=produtos.find(x=>x.id===pid);const m={id:uid(),tipo:'compra',p:pid,q,t:agora};if(v>0){m.custo=v;p.custo=v/q}
+      mov.push(m);n++});
+    if(!n){toast('Nada para lançar');return}
+    ultimaDif=`<div class="dif"><b>${n} produto(s) lançados</b> pela foto.${produtos.some(p=>!p.preco)?' Tem produto novo sem preço de venda: acerte em "Produtos e preços".':''}</div>`;
+    salvar();renderEstoque();toast('Entrada lançada')};
+}
+{const d=lerEntrada();if(d)setTimeout(()=>abrirEntrada(d),300)}
 
 setInterval(()=>{if(hoje()!==dia&&!aberta)render()},60000);
 render();
@@ -347,7 +491,7 @@ if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceW
   if(typeof claude==='undefined')return;
   db=await claude.use('db');if(!db)return;
   const d=await db.collection('bar').doc('estado').get();const dd=d&&(typeof d.data==='function'?d.data():d);
-  if(dd&&dd.json){const s=JSON.parse(dd.json);if((s.contas||[]).length>=contas.length){contas=s.contas;produtos=s.produtos||produtos;salvarLocal();render()}}
+  if(dd&&dd.json){const s=JSON.parse(dd.json);if((s.contas||[]).length>=contas.length){contas=s.contas;produtos=s.produtos||produtos;mov=s.mov||mov;salvarLocal();render()}}
   else salvar();
 }catch(e){}})();
 </script>
