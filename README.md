@@ -8,4 +8,4 @@ App de anotação do balcão: substitui o caderno de contas. Uma tela só, imita
 
 Regra que manda em tudo: lançar um item em no máximo 3 toques.
 
-Publicado pelo GitHub Pages a partir da branch `main`.
+Publicado pelo GitHub Pages a partir da branch `main`: https://centrodacoroa.github.io/controle-bar/
