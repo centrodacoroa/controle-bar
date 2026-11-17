@@ -18,4 +18,5 @@ Cloudflare Worker que lê a foto da nota ou pedido com a API do Claude e devolve
 
 - O repositório é público: a chave da API **nunca** entra no código nem no app. Ela fica só como secret `ANTHROPIC_API_KEY` no Cloudflare.
 - Proteções: só aceita a origem `https://centrodacoroa.github.io`, exige o código de acesso (secret `CODIGO_ACESSO`, configurado uma vez no app), e limita o tamanho da imagem.
+- Publicado em https://foto-nota-bar.centrodacoroa.workers.dev (conta Cloudflare do dono). Para republicar depois de mudar `servidor-foto/`: `cd servidor-foto && npx wrangler deploy` (com o token da Cloudflare no ambiente).
 - Nada entra no estoque sem o dono conferir e tocar em "Confirmar entrada" (`abrirEntrada`).

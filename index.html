@@ -515,10 +515,11 @@ async function abrirEntrada(d,dentro){
  que lê a nota com o Claude e devolve {itens:[{nome,q,custo,p}]}. Depois cai na conferência acima.
  Endereço e código ficam em localStorage 'bar_foto' (fora do bar_v2; não vai no backup). */
 const FOTOK='bar_foto';
+const FOTO_PADRAO='https://foto-nota-bar.centrodacoroa.workers.dev';
 let fotoPend=null;
 const fotoCfg=()=>{try{const c=JSON.parse(localStorage.getItem(FOTOK)||'null');return c&&c.u&&c.c?c:null}catch(e){return null}};
 function formFotoCfg(depoisFoto){
-  const c=fotoCfg()||{u:'',c:''};
+  const c=fotoCfg()||{u:FOTO_PADRAO,c:''};
   $('#eForm').innerHTML=`<div class="cx"><b>📷 Configurar foto da nota</b><p class="nota" style="margin-top:2px">Só precisa fazer uma vez neste celular.</p>
    <label>Endereço do servidor</label><input id="fU" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="foto-nota-bar.seunome.workers.dev" value="${esc(c.u.replace(/^https:\/\//,''))}">
    <label>Código de acesso</label><input id="fC" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(c.c)}">

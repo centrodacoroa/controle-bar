@@ -1,5 +1,7 @@
 # Como colocar a "Foto da nota" para funcionar
 
+> **Situação atual:** o servidor já está publicado em `https://foto-nota-bar.centrodacoroa.workers.dev` e o `CODIGO_ACESSO` já está cadastrado. Falta só o secret `ANTHROPIC_API_KEY` (parte 3, item 6) e ligar no celular (parte 4). O app já vem com o endereço preenchido.
+
 São 4 partes, feitas uma vez só. Leva uns 20 minutos. Faça no computador; só a parte 4 é no celular.
 
 Antes de começar, invente um **código de acesso**: uma senha comprida só de letras e números, por exemplo `coroa7bar2026nota`. Anote num papel. Ele vai em dois lugares: no Cloudflare (parte 3) e no app (parte 4).
