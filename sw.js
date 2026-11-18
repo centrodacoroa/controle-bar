@@ -1,6 +1,6 @@
 // Guarda o app no celular para abrir sem internet.
 // Rede primeiro (pega a versão nova quando tem internet), cache como reserva.
-const CACHE = 'controle-bar-v2';
+const CACHE = 'controle-bar-v3';
 const ARQS = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
