@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Controle de Bar</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -16,8 +16,9 @@ body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;bac
 button{font-family:inherit}
 .top{position:sticky;top:0;z-index:5;background:#fdfbf3;padding:10px 12px 8px;border-bottom:2px solid #e0c9c9}
 .cab{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.cab b{font-size:17px}
-.cab .res{font-size:13px;color:#666;flex:1;text-align:right}
+.cab b{font-size:17px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top .res{font-size:13px;color:#555;margin:-2px 0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cab .logo{height:40px;width:auto;flex:none;margin:-4px 0}
 .ic{border:1px solid #ddd;background:#fff;border-radius:10px;font-size:14px;padding:6px 10px;color:#333}
 #nome{width:100%;font-size:20px;padding:14px;border:2px solid #1f5c3a;border-radius:12px;background:#fff}
 .novo{display:none;width:100%;margin-top:8px;border:0;border-radius:12px;padding:14px;font-size:18px;font-weight:700;background:#1f5c3a;color:#fff}
@@ -51,7 +52,7 @@ button{font-family:inherit}
 .novo1{animation:pisca 1s}@keyframes pisca{0%{background:#bfe3cc}100%{background:transparent}}
 .menos{border:0;background:#fbe3e1;color:#b3261e;border-radius:10px;padding:8px 12px;font-size:15px;font-weight:700}
 .prods{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.prod{border:2px solid #e4e4de;border-radius:14px;background:#fafaf7;padding:10px 4px;font-size:15px;font-weight:700;min-height:86px;position:relative;color:#1d1d1b}
+.prod{border:2px solid #e4e4de;border-radius:14px;background:#fff;padding:10px 4px;font-size:15px;font-weight:700;min-height:86px;position:relative;color:#1d1d1b}
 .prod .e{display:block;font-size:26px}
 .prod .p{display:block;font-weight:400;color:#1f5c3a;font-size:14px}
 .prod .q{position:absolute;top:-8px;right:-6px;background:#1f5c3a;color:#fff;border-radius:12px;min-width:24px;padding:2px 6px;font-size:14px}
@@ -101,7 +102,8 @@ a.btn{display:block;text-align:center;text-decoration:none}
 .gf{width:44px;height:44px;padding:0!important;border:1px solid #ccc!important;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;font-size:18px;line-height:1}
 .gf img{width:100%;height:100%;object-fit:contain}.gf small{font-size:11px}
 .gsf{border:0;background:none;color:#b3261e;font-size:13px;text-decoration:underline;padding:2px 0!important}.gsf.conf{font-weight:700}
-.prod .fi{display:block;width:100%;height:66px;object-fit:contain;margin:0 auto 4px}
+.prod .fi{display:block;width:100%;height:84px;object-fit:contain;margin:0 auto 6px}
+.prod.cf{padding-top:6px;line-height:1.15}
 .toast{max-width:92vw;text-align:center}
 .gp button{border:0;border-radius:8px;padding:8px 0}
 .gm{grid-column:1/-1;display:flex;align-items:center;gap:6px;font-size:13px;color:#777}
@@ -112,7 +114,8 @@ a.btn{display:block;text-align:center;text-decoration:none}
 </head>
 <body>
 <div class="top">
-  <div class="cab"><b id="dia"></b><span class="res" id="res"></span><button class="ic" id="bResumo">Fechar dia</button><button class="ic" id="bDono">⚙︎</button></div>
+  <div class="cab"><img class="logo" src="logo.png" alt="Centro da Coroa F.C."><b id="dia"></b><button class="ic" id="bResumo">Fechar dia</button><button class="ic" id="bDono">⚙︎</button></div>
+  <div class="res" id="res"></div>
   <input id="nome" placeholder="Escreva o nome…" autocomplete="off" autocapitalize="words">
   <button class="novo" id="novo"></button>
   <div class="dup" id="dup"></div>
@@ -175,21 +178,25 @@ const CARD0=[['cerveja','Original',18],['cerveja','Heineken',18],['cerveja','Cor
  ['chocolate','Bis',5],['chocolate','Kit Kat',6],['chocolate','Snickers',6],['chocolate','Prestígio',5],['chocolate','Sonho de Valsa',2],
  ['bala','Halls',4],['bala','Trident',4],['bala','Bala Fini',5],['bala','Bala avulsa',0.5],
  ['doce','Paçoca',2],['doce','Pé de moleque',2],['doce','Doce de leite',2],['doce','Pirulito',1]];
-/* fotos que já vêm com o app (pasta fotos/, créditos em fotos/CREDITOS.md). Chave = nome do produto.
+/* fotos que já vêm com o app (pasta fotos/, 300x300, enviadas pelo bar em 18/11/2026). Chave = nome do produto.
  Ao incluir fotos novas aqui, suba FOTOS_V: produtos que nunca tiveram foto ganham a nova (quem o dono tirou a foto fica sem). */
 const FOTOS={
- 'Original':'fotos/original.jpg','Heineken':'fotos/heineken.jpg','Corona':'fotos/corona.jpg','Brahma':'fotos/brahma.jpg',
- 'Red Bull':'fotos/red-bull.jpg','Coca-Cola':'fotos/coca-cola.jpg','Coca-Cola Zero':'fotos/coca-cola-zero.jpg','Guaraná Antarctica':'fotos/guarana-antarctica.jpg',
- 'Fanta Laranja':'fotos/fanta-laranja.jpg','Sprite':'fotos/sprite.jpg','Água sem gás':'fotos/agua-sem-gas.jpg','Coxinha':'fotos/coxinha.jpg',
- 'Kibe':'fotos/kibe.jpg','Enroladinho de salsicha':'fotos/enroladinho-de-salsicha.jpg','Esfiha de carne':'fotos/esfiha-de-carne.jpg','Pastel':'fotos/pastel.jpg',
- 'Ruffles':'fotos/ruffles.jpg','Doritos':'fotos/doritos.jpg','Cheetos':'fotos/cheetos.jpg','Cebolitos':'fotos/cebolitos.jpg',
- 'Cornetto':'fotos/cornetto.jpg','Magnum':'fotos/magnum.jpg','Cachaça 51':'fotos/cachaca-51.jpg','Ypióca':'fotos/ypioca.jpg',
- 'Vodka Smirnoff':'fotos/vodka-smirnoff.jpg','Campari':'fotos/campari.jpg','Whisky Red Label':'fotos/whisky-red-label.jpg','Kit Kat':'fotos/kit-kat.jpg',
- 'Snickers':'fotos/snickers.jpg','Sonho de Valsa':'fotos/sonho-de-valsa.jpg','Trident':'fotos/trident.jpg','Bala avulsa':'fotos/bala-avulsa.jpg',
- 'Paçoca':'fotos/pacoca.jpg','Pé de moleque':'fotos/pe-de-moleque.jpg','Doce de leite':'fotos/doce-de-leite.jpg','Pirulito':'fotos/pirulito.jpg'};
-const FOTOS_V=1;
+ 'Bala avulsa':'fotos/bala-avulsa.jpg','Bala Fini':'fotos/bala-fini.jpg','Halls':'fotos/halls.jpg','Trident':'fotos/trident.jpg',
+ 'Brahma':'fotos/brahma.jpg','Corona':'fotos/corona.jpg','Heineken':'fotos/heineken.jpg','Original':'fotos/original.jpg',
+ 'Skol':'fotos/skol.jpg','Bis':'fotos/bis.jpg','Kit Kat':'fotos/kit-kat.jpg','Prestígio':'fotos/prestigio.jpg',
+ 'Snickers':'fotos/snickers.jpg','Sonho de Valsa':'fotos/sonho-de-valsa.jpg','Doce de leite':'fotos/doce-de-leite.jpg','Paçoca':'fotos/pacoca.jpg',
+ 'Pirulito':'fotos/pirulito.jpg','Pé de moleque':'fotos/pe-de-moleque.jpg','Cachaça 51':'fotos/cachaca-51.jpg','Campari':'fotos/campari.jpg',
+ 'Conhaque Dreher':'fotos/conhaque-dreher.jpg','Vodka Smirnoff':'fotos/vodka-smirnoff.jpg','Whisky Red Label':'fotos/whisky-red-label.jpg','Ypióca':'fotos/ypioca.jpg',
+ 'Red Bull Zero':'fotos/red-bull-zero.jpg','Red Bull':'fotos/red-bull.jpg','Linguiça com vinagrete':'fotos/linguica-com-vinagrete.jpg','Coca-Cola Zero':'fotos/coca-cola-zero.jpg',
+ 'Coca-Cola':'fotos/coca-cola.jpg','Fanta Laranja':'fotos/fanta-laranja.jpg','Guaraná Antarctica':'fotos/guarana-antarctica.jpg','Sprite':'fotos/sprite.jpg',
+ 'Cebolitos':'fotos/cebolitos.jpg','Cheetos':'fotos/cheetos.jpg','Doritos':'fotos/doritos.jpg','Fandangos':'fotos/fandangos.jpg',
+ 'Ruffles':'fotos/ruffles.jpg','Coxinha':'fotos/coxinha.jpg','Enroladinho de salsicha':'fotos/enroladinho-de-salsicha.jpg','Esfiha de carne':'fotos/esfiha-de-carne.jpg',
+ 'Kibe':'fotos/kibe.jpg','Pastel':'fotos/pastel.jpg','Chicabon':'fotos/chicabon.jpg','Cornetto':'fotos/cornetto.jpg',
+ 'Eskibon':'fotos/eskibon.jpg','Fruttare':'fotos/fruttare.jpg','Magnum':'fotos/magnum.jpg','Água com gás':'fotos/agua-com-gas.jpg',
+ 'Água sem gás':'fotos/agua-sem-gas.jpg'};
+const FOTOS_V=2;
 const fotoPadrao=nome=>FOTOS[Object.keys(FOTOS).find(k=>normal(k)===normal(nome))]||'';
-const cardapio=()=>CARD0.map((x,i)=>({id:'m'+(i+1),e:'',nome:x[1],preco:x[2],cat:x[0],foto:fotoPadrao(x[1])}));
+const cardapio=()=>CARD0.map((x,i)=>({id:'m'+(i+1),e:'',nome:x[1],preco:x[2],cat:x[0],foto:fotoPadrao(x[1])||undefined}));
 /* os 12 produtos de exemplo da primeira versão: saem na migração (a não ser que tenham estoque lançado) */
 const EXEMPLOS={p1:'Cerveja lata',p2:'Cerveja 600',p3:'Refri lata',p4:'Água',p5:'Coxinha',p6:'Salgadinho',p7:'Bala',p8:'Chocolate',p9:'Sorvete',p10:'Pirulito',p11:'Energético',p12:'Cachorro-quente'};
 const PADRAO_TOP=['Original','Heineken','Brahma','Coca-Cola','Coxinha','Red Bull'];
@@ -216,7 +223,8 @@ function migrar(){
   }
   const v=ids();produtos.forEach(p=>{if(!v.has(p.cat))p.cat=''});
   /* foto: undefined = nunca teve (pode ganhar a do app); '' = o dono tirou; 'fotos/…' = do app; 'data:…' = tirada no celular */
-  if(fotosV<FOTOS_V){produtos.forEach(p=>{if(p.foto===undefined){const f=fotoPadrao(p.nome);if(f)p.foto=f}});fotosV=FOTOS_V}
+  // v2 (fotos do bar): até a v1 o app gravava '' em quem não tinha foto do app, então nessa subida '' também recebe a foto nova
+  if(fotosV<FOTOS_V){produtos.forEach(p=>{if(p.foto===undefined||(fotosV<2&&p.foto==='')){const f=fotoPadrao(p.nome);if(f)p.foto=f}});fotosV=FOTOS_V}
 }
 const estado=()=>({produtos,contas,mov,cats,fotosV});
 function aplicar(s){contas=s.contas||[];mov=s.mov||[];fotosV=s.fotosV||0;if(Array.isArray(s.produtos)){produtos=s.produtos;cats=Array.isArray(s.cats)?s.cats:undefined}migrar()}
@@ -589,10 +597,10 @@ function renderDono(){
 }
 document.querySelectorAll('#dono [data-aba]').forEach(b=>b.onclick=()=>{donoAba=b.dataset.aba;renderDono()});
 $('#dVolta').onclick=()=>{$('#dono').classList.remove('on');ultimaDif=null;render()};
-/* foto tirada no celular (câmera ou galeria): reduz para 200×200 em JPEG (~10 KB) antes de guardar */
+/* foto tirada no celular (câmera ou galeria): reduz para 300×300 em JPEG (~15 KB) antes de guardar */
 function reduzFoto(arq){return new Promise((ok,erro)=>{const u=URL.createObjectURL(arq), im=new Image();
-  im.onload=()=>{const L=200, c=document.createElement('canvas');c.width=c.height=L;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,L,L);
-    const s=Math.min(L/im.width,L/im.height), w=im.width*s, h=im.height*s;x.drawImage(im,(L-w)/2,(L-h)/2,w,h);URL.revokeObjectURL(u);ok(c.toDataURL('image/jpeg',.75))};
+  im.onload=()=>{const L=300, c=document.createElement('canvas');c.width=c.height=L;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,L,L);
+    const s=Math.min(L/im.width,L/im.height), w=im.width*s, h=im.height*s;x.drawImage(im,(L-w)/2,(L-h)/2,w,h);URL.revokeObjectURL(u);ok(c.toDataURL('image/jpeg',.8))};
   im.onerror=()=>{URL.revokeObjectURL(u);erro()};im.src=u})}
 $('#fotoArq').onchange=async e=>{const f=e.target.files[0], p=produtos.find(x=>x.id===e.target.dataset.pid);if(!f||!p)return;
   try{p.foto=await reduzFoto(f);salvar();toast('Foto salva');renderDono()}catch(er){toast('Não deu para abrir essa imagem')}};
