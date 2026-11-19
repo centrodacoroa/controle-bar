@@ -43,6 +43,8 @@ button{font-family:inherit}
 .ph{padding:12px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #eee}
 .ph h2{margin:0;font-size:24px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ph .t{font-size:24px;font-weight:800;color:#1f5c3a}
+.vt{border:1px solid #cfd8d2;background:#f3f6f4;color:#1f5c3a;border-radius:10px;padding:8px 12px;font-size:15px;font-weight:700;white-space:nowrap}
+.vt.on{border:0;background:none;padding:0 4px;font-size:24px;font-weight:800}
 .pb{flex:1;overflow:auto;padding:12px}
 .aviso{background:#fbe3e1;color:#7a1712;border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:15px}
 .aviso.ok{background:#e3f1e8;color:#1f5c3a}
@@ -315,16 +317,23 @@ function perguntarDup(n,iguais,dev){
 function novaConta(n){const c={id:uid(),nome:n,dia,itens:[],status:'aberta',t:Date.now()};contas.push(c);salvar();abrir(c.id)}
 
 /* ----- conta aberta ----- */
-function abrir(id){ultimo=null;catAberta=null;topIds=maisPedidos();aberta=contas.find(c=>c.id===id);$('#dup').style.display='none';$('#fechar').classList.remove('on');$('#sheet').classList.add('on');renderConta()}
+/* total escondido: o cliente vê a tela, e ver quanto já gastou pode frear o consumo. Só aparece no "Ver total" (some sozinho em 6 s)
+ ou na hora de fechar a conta (botões Pix/Dinheiro). */
+let verTot=false, verTotT=null;
+function mostrarTotal(on){clearTimeout(verTotT);verTot=on;if(on)verTotT=setTimeout(()=>{verTot=false;if(aberta)renderConta()},6000);if(aberta)renderConta()}
+function abrir(id){ultimo=null;catAberta=null;clearTimeout(verTotT);verTot=false;topIds=maisPedidos();aberta=contas.find(c=>c.id===id);$('#dup').style.display='none';$('#fechar').classList.remove('on');$('#sheet').classList.add('on');renderConta()}
 function renderConta(){
   const c=aberta, g=agrupa(c.itens), trav=c.status!=='aberta';
-  $('#sNome').textContent=c.nome;$('#sTot').textContent=brl(total(c));
+  const ver=verTot||$('#fechar').classList.contains('on');
+  $('#sNome').textContent=c.nome;
+  $('#sTot').innerHTML=ver?`<button class="vt on" id="bTot">${brl(total(c))}</button>`:`<button class="vt" id="bTot">👁 Ver total</button>`;
+  $('#bTot').onclick=()=>mostrarTotal(!verTot);
   let h='';
   const outras=devendo().filter(x=>x.id!==c.id&&x.nome.toLowerCase()===c.nome.toLowerCase());
-  if(outras.length&&c.status==='aberta')h+=`<div class="aviso">⚠︎ ${esc(c.nome)} está devendo ${brl(outras.reduce((s,x)=>s+total(x),0))} de ${outras.map(x=>dbr(x.dia)).join(', ')}. <u data-ab="${outras[0].id}">Ver</u></div>`;
+  if(outras.length&&c.status==='aberta')h+=`<div class="aviso">⚠︎ ${esc(c.nome)} está devendo ${ver?brl(outras.reduce((s,x)=>s+total(x),0))+' ':''}de ${outras.map(x=>dbr(x.dia)).join(', ')}. <u data-ab="${outras[0].id}">Ver</u></div>`;
   if(c.status==='devendo')h+=`<div class="aviso">Ficou devendo desde ${dbr(c.dia)}. Quando pagar, toque em "Fechar conta".</div>`;
   if(c.status==='paga')h+=`<div class="aviso ok">Paga em ${dbr(c.pagoDia)} no ${c.forma==='pix'?'Pix':'dinheiro'}.</div>`;
-  h+=`<div class="lista"><b>Pegou:</b>${Object.keys(g).length?Object.entries(g).map(([pid,x])=>`<div class="pg${pid===ultimo?' novo1':''}"><span><b class="qq">${x.q}×</b> ${esc(x.nome)}</span><b>${brl(x.v)}</b>${trav?'':`<button class="menos" data-m="${pid}">− tirar 1</button>`}</div>`).join(''):' <span style="color:#888">nada ainda</span>'}</div>`;
+  h+=`<div class="lista"><b>Pegou:</b>${Object.keys(g).length?Object.entries(g).map(([pid,x])=>`<div class="pg${pid===ultimo?' novo1':''}"><span><b class="qq">${x.q}×</b> ${esc(x.nome)}</span>${ver?`<b>${brl(x.v)}</b>`:''}${trav?'':`<button class="menos" data-m="${pid}">− tirar 1</button>`}</div>`).join(''):' <span style="color:#888">nada ainda</span>'}</div>`;
   if(!trav){const cont={};c.itens.forEach(i=>cont[i.p]=(cont[i.p]||0)+1);
     const bq=n=>n?`<span class="q">${n}</span>`:'';
     const btn=(p,emo)=>`<button class="prod${p.foto?' cf':''}" data-p="${p.id}">${p.foto?imgFoto(p):emo?`<span class="e">${esc(emoDe(p))}</span>`:''}${esc(p.nome)}<span class="p">${brl(p.preco)}</span>${bq(cont[p.id])}</button>`;
@@ -369,9 +378,9 @@ $('#bVolta').onclick=()=>{
 $('#bFechar').onclick=()=>{
   const c=aberta,f=$('#fechar');
   if(c.status==='paga'){c.status=c.forma=c.pagoDia=undefined;c.status='aberta';delete c.forma;delete c.pagoDia;salvar();toast('Reaberta');renderConta();return}
-  if(f.classList.contains('on')){f.classList.remove('on');return}
+  if(f.classList.contains('on')){f.classList.remove('on');renderConta();return}
   f.innerHTML=`<button class="btn b4" data-f="pix">Pix ${brl(total(c))}</button><button class="btn b3" data-f="dinheiro">Dinheiro ${brl(total(c))}</button>${c.status==='aberta'?'<button class="btn b2 w" data-f="dev">Ficou devendo</button>':''}`;
-  f.classList.add('on');
+  f.classList.add('on');renderConta(); // fechando: o total aparece
   f.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{
     const k=b.dataset.f;
     if(k==='dev'){c.status='devendo';toast(c.nome+' ficou devendo')}
