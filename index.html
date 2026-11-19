@@ -275,15 +275,14 @@ function render(){
   const rec=contas.filter(c=>c.status==='paga'&&c.pagoDia===dia).reduce((s,c)=>s+total(c),0);
   $('#res').textContent=`Aberto ${brl(ab.reduce((s,c)=>s+total(c),0))} · Recebido ${brl(rec)}`;
   const q=$('#nome').value.trim().toLowerCase(), f=c=>!q||c.nome.toLowerCase().includes(q);
-  const linha=(c,cls)=>`<div class="linha ${cls}" data-id="${c.id}"><span class="n">${esc(c.nome)}<span class="r">${cls==='dev'?'devendo desde '+dbr(c.dia)+' · ':''}${esc(resumo(c))}</span></span><span class="v">${brl(total(c))}</span></div>`;
+  const linha=(c,cls)=>`<div class="linha ${cls}" data-id="${c.id}"><span class="n">${esc(c.nome)}<span class="r">${cls==='dev'?'devendo desde '+dbr(c.dia)+' · ':''}${esc(resumo(c))}</span></span></div>`; // sem o total: o cliente pode ver esta tela (o total fica no "Ver total" da conta)
   const a=ab.filter(f).sort((x,y)=>y.t-x.t);
   const pg=doDia().filter(c=>c.status==='paga'&&f(c));
   const dv=devendo().filter(f);
   let h=a.map(c=>linha(c,'')).join('');
   if(dv.length){
-    const totDv=dv.reduce((s,c)=>s+total(c),0);
-    if(q||verDevendo)h+=`<div class="sep dev" id="sepDev">Devendo · ${dv.length} · ${brl(totDv)}${q?'':' ▲'}</div>`+dv.map(c=>linha(c,'dev')).join('');
-    else h+=`<div class="sep dev" id="sepDev">Devendo · ${dv.length} pessoa(s) · ${brl(totDv)} ▼ ver</div>`;
+    if(q||verDevendo)h+=`<div class="sep dev" id="sepDev">Devendo · ${dv.length} pessoa(s)${q?'':' ▲'}</div>`+dv.map(c=>linha(c,'dev')).join('');
+    else h+=`<div class="sep dev" id="sepDev">Devendo · ${dv.length} pessoa(s) ▼ ver</div>`;
   }
   if(pg.length)h+=`<div class="sep">Pagos hoje</div>`+pg.map(c=>linha(c,'pago')).join('');
   $('#folha').innerHTML=h||`<div class="vazio">${q?'Ninguém com esse nome hoje.':'Folha em branco. Escreva o primeiro nome lá em cima.'}</div>`;
@@ -306,7 +305,7 @@ function criar(){
 function perguntarDup(n,iguais,dev){
   const d=$('#dup');d.style.display='block';
   const ex=iguais[0];
-  d.innerHTML=`<p>${ex?`Já tem <b>${esc(n)}</b> aberto hoje (${brl(total(ex))}).`:''}${dev.length?` <b>${esc(n)}</b> está devendo ${brl(dev.reduce((s,c)=>s+total(c),0))}.`:''} É a mesma pessoa?</p>
+  d.innerHTML=`<p>${ex?`Já tem <b>${esc(n)}</b> aberto hoje.`:''}${dev.length?` <b>${esc(n)}</b> tem conta em aberto de outro dia.`:''} É a mesma pessoa?</p>
    <div class="bt">${ex?`<button class="btn b3" id="dMesmo">Sim, abrir</button>`:`<button class="btn b3" id="dMesmo">Sim, nova conta</button>`}<button class="btn b1" id="dOutro">Não, é outro</button></div>
    <input id="dApel" placeholder="Apelido: ex. ${esc(n)} goleiro" style="display:none" autocapitalize="words">`;
   $('#dMesmo').onclick=()=>{d.style.display='none';ex?abrir(ex.id):novaConta(n)};
