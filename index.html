@@ -17,7 +17,8 @@ button{font-family:inherit}
 .top{position:sticky;top:0;z-index:5;background:#fdfbf3;padding:10px 12px 8px;border-bottom:2px solid #e0c9c9}
 .cab{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .cab b{font-size:17px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.top .res{font-size:13px;color:#555;margin:-2px 0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top .res{font-size:13px;color:#555;margin:-6px 0 4px;padding:4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;-webkit-user-select:none;user-select:none}
+.top .res .rb{color:#1f5c3a;font-weight:600}
 .cab .logo{height:40px;width:auto;flex:none;margin:-4px 0}
 .ic{border:1px solid #ddd;background:#fff;border-radius:10px;font-size:14px;padding:6px 10px;color:#333}
 #nome{width:100%;font-size:20px;padding:14px;border:2px solid #1f5c3a;border-radius:12px;background:#fff}
@@ -268,12 +269,15 @@ const resumo=c=>Object.values(agrupa(c.itens)).map(x=>x.q+' '+x.nome).join(', ')
 const doDia=()=>contas.filter(c=>c.dia===dia);
 const devendo=()=>contas.filter(c=>c.status==='devendo');
 
+let verCaixa=false, verCaixaT=null;
+$('#res').onclick=()=>{clearTimeout(verCaixaT);verCaixa=!verCaixa;if(verCaixa)verCaixaT=setTimeout(()=>{verCaixa=false;render()},6000);render()};
 function render(){
   if(hoje()!==dia){dia=hoje()}
   $('#dia').textContent=new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit'});
   const ab=doDia().filter(c=>c.status==='aberta');
   const rec=contas.filter(c=>c.status==='paga'&&c.pagoDia===dia).reduce((s,c)=>s+total(c),0);
-  $('#res').textContent=`Aberto ${brl(ab.reduce((s,c)=>s+total(c),0))} · Recebido ${brl(rec)}`;
+  // caixa do dia escondido (o cliente vê a tela): toque mostra por 6 s
+  $('#res').innerHTML=verCaixa?`Aberto ${brl(ab.reduce((s,c)=>s+total(c),0))} · Recebido ${brl(rec)}`:'<span class="rb">👁 Ver caixa do dia</span>';
   const q=$('#nome').value.trim().toLowerCase(), f=c=>!q||c.nome.toLowerCase().includes(q);
   const linha=(c,cls)=>`<div class="linha ${cls}" data-id="${c.id}"><span class="n">${esc(c.nome)}<span class="r">${cls==='dev'?'devendo desde '+dbr(c.dia)+' · ':''}${esc(resumo(c))}</span></span></div>`; // sem o total: o cliente pode ver esta tela (o total fica no "Ver total" da conta)
   const a=ab.filter(f).sort((x,y)=>y.t-x.t);
