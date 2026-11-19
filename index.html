@@ -52,6 +52,10 @@ button{font-family:inherit}
 .lista{margin:0 0 14px;background:#f6f3e6;border-radius:12px;padding:8px 12px;font-size:16px;color:#444}
 .pg{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #e7e2cf}.pg:last-child{border-bottom:0}.pg span{flex:1}
 .qq{font-size:20px;color:#1f5c3a}
+.hb{display:block;border:0;background:none;color:#1f5c3a;font-size:14px;font-weight:600;padding:8px 0 2px}
+.hist{border-top:1px solid #e7e2cf;margin-top:4px;padding-top:4px;font-size:14px;max-height:240px;overflow:auto}
+.he{display:flex;gap:10px;padding:3px 0}.he span{color:#888;min-width:44px;font-variant-numeric:tabular-nums}
+.hx{color:#b3261e}
 .novo1{animation:pisca 1s}@keyframes pisca{0%{background:#bfe3cc}100%{background:transparent}}
 .menos{border:0;background:#fbe3e1;color:#b3261e;border-radius:10px;padding:8px 12px;font-size:15px;font-weight:700}
 .prods{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -279,7 +283,7 @@ function render(){
   // caixa do dia escondido (o cliente vê a tela): toque mostra por 6 s
   $('#res').innerHTML=verCaixa?`Aberto ${brl(ab.reduce((s,c)=>s+total(c),0))} · Recebido ${brl(rec)}`:'<span class="rb">👁 Ver caixa do dia</span>';
   const q=$('#nome').value.trim().toLowerCase(), f=c=>!q||c.nome.toLowerCase().includes(q);
-  const linha=(c,cls)=>`<div class="linha ${cls}" data-id="${c.id}"><span class="n">${esc(c.nome)}<span class="r">${cls==='dev'?'devendo desde '+dbr(c.dia)+' · ':''}${esc(resumo(c))}</span></span></div>`; // sem o total: o cliente pode ver esta tela (o total fica no "Ver total" da conta)
+  const linha=(c,cls)=>`<div class="linha ${cls}" data-id="${c.id}"><span class="n">${esc(c.nome)}<span class="r">${cls==='dev'?'devendo desde '+dbr(c.dia)+' · ':cls==='pago'?(c.pagoEm?'pagou '+hora(c.pagoEm)+' · ':''):'desde '+hora(abertaEm(c))+' · '}${esc(resumo(c))}</span></span></div>`; // sem o total: o cliente pode ver esta tela (o total fica no "Ver total" da conta)
   const a=ab.filter(f).sort((x,y)=>y.t-x.t);
   const pg=doDia().filter(c=>c.status==='paga'&&f(c));
   const dv=devendo().filter(f);
@@ -317,14 +321,31 @@ function perguntarDup(n,iguais,dev){
     $('#dOutro').onclick=()=>{const v=cap(i.value.trim());if(!v||v.toLowerCase()===n.toLowerCase()){toast('Escreva um apelido');return}d.style.display='none';novaConta(v)};
     i.onkeydown=e=>{if(e.key==='Enter')$('#dOutro').click()}};
 }
-function novaConta(n){const c={id:uid(),nome:n,dia,itens:[],status:'aberta',t:Date.now()};contas.push(c);salvar();abrir(c.id)}
+function novaConta(n){const agora=Date.now(), c={id:uid(),nome:n,dia,itens:[],status:'aberta',t:agora,abertaEm:agora,hist:[{t:agora,k:'abriu'}]};contas.push(c);salvar();abrir(c.id)}
 
 /* ----- conta aberta ----- */
+/* ----- linha do tempo da conta -----
+ conta.hist = [{t,k:'abriu'|'+'|'-'|'pagou'|'devendo'|'reabriu',n?:produto,f?:'pix'|'dinheiro'}]; abertaEm / pagoEm / devendoEm = horas.
+ Conta de antes desta versão não tem hist: monta um aproximado com os itens (a abertura vira a hora do 1º item). */
+const hora=t=>new Date(t).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+const abertaEm=c=>c.abertaEm||(c.itens.length?Math.min(...c.itens.map(i=>i.t)):c.t);
+function histDe(c){
+  if(c.hist)return c.hist;
+  return [{t:abertaEm(c),k:'abriu',aprox:!c.abertaEm},...c.itens.map(i=>({t:i.t,k:'+',n:i.nome})).sort((a,b)=>a.t-b.t)];
+}
+function evento(c,e){if(!c.hist)c.hist=histDe(c);c.hist.push(e)}
+function htmlHist(c){
+  const d0=c.dia, fmt=t=>{const d=dstr(new Date(t));return (d!==d0?dbr(d)+' ':'')+hora(t)};
+  const txt=e=>e.k==='abriu'?(e.aprox?'abriu (aprox.)':'abriu a conta'):e.k==='+'?'+1 '+esc(e.n):e.k==='-'?'<b class="hx">tirou 1 '+esc(e.n)+'</b>':
+    e.k==='pagou'?'<b>pagou no '+(e.f==='pix'?'Pix':'dinheiro')+'</b>':e.k==='devendo'?'<b class="hx">ficou devendo</b>':'reabriu a conta';
+  return histDe(c).map(e=>`<div class="he"><span>${fmt(e.t)}</span>${txt(e)}</div>`).join('');
+}
+let verHist=false;
 /* total escondido: o cliente vê a tela, e ver quanto já gastou pode frear o consumo. Só aparece no "Ver total" (some sozinho em 6 s)
  ou na hora de fechar a conta (botões Pix/Dinheiro). */
 let verTot=false, verTotT=null;
 function mostrarTotal(on){clearTimeout(verTotT);verTot=on;if(on)verTotT=setTimeout(()=>{verTot=false;if(aberta)renderConta()},6000);if(aberta)renderConta()}
-function abrir(id){ultimo=null;catAberta=null;clearTimeout(verTotT);verTot=false;topIds=maisPedidos();aberta=contas.find(c=>c.id===id);$('#dup').style.display='none';$('#fechar').classList.remove('on');$('#sheet').classList.add('on');renderConta()}
+function abrir(id){ultimo=null;catAberta=null;verHist=false;clearTimeout(verTotT);verTot=false;topIds=maisPedidos();aberta=contas.find(c=>c.id===id);$('#dup').style.display='none';$('#fechar').classList.remove('on');$('#sheet').classList.add('on');renderConta()}
 function renderConta(){
   const c=aberta, g=agrupa(c.itens), trav=c.status!=='aberta';
   const ver=verTot||$('#fechar').classList.contains('on');
@@ -336,7 +357,7 @@ function renderConta(){
   if(outras.length&&c.status==='aberta')h+=`<div class="aviso">⚠︎ ${esc(c.nome)} está devendo ${ver?brl(outras.reduce((s,x)=>s+total(x),0))+' ':''}de ${outras.map(x=>dbr(x.dia)).join(', ')}. <u data-ab="${outras[0].id}">Ver</u></div>`;
   if(c.status==='devendo')h+=`<div class="aviso">Ficou devendo desde ${dbr(c.dia)}. Quando pagar, toque em "Fechar conta".</div>`;
   if(c.status==='paga')h+=`<div class="aviso ok">Paga em ${dbr(c.pagoDia)} no ${c.forma==='pix'?'Pix':'dinheiro'}.</div>`;
-  h+=`<div class="lista"><b>Pegou:</b>${Object.keys(g).length?Object.entries(g).map(([pid,x])=>`<div class="pg${pid===ultimo?' novo1':''}"><span><b class="qq">${x.q}×</b> ${esc(x.nome)}</span>${ver?`<b>${brl(x.v)}</b>`:''}${trav?'':`<button class="menos" data-m="${pid}">− tirar 1</button>`}</div>`).join(''):' <span style="color:#888">nada ainda</span>'}</div>`;
+  h+=`<div class="lista"><b>Pegou:</b>${Object.keys(g).length?Object.entries(g).map(([pid,x])=>`<div class="pg${pid===ultimo?' novo1':''}"><span><b class="qq">${x.q}×</b> ${esc(x.nome)}</span>${ver?`<b>${brl(x.v)}</b>`:''}${trav?'':`<button class="menos" data-m="${pid}">− tirar 1</button>`}</div>`).join(''):' <span style="color:#888">nada ainda</span>'}<button class="hb" id="bHist">🕒 Horários ${verHist?'▲':'▼'}</button>${verHist?`<div class="hist">${htmlHist(c)}</div>`:''}</div>`;
   if(!trav){const cont={};c.itens.forEach(i=>cont[i.p]=(cont[i.p]||0)+1);
     const bq=n=>n?`<span class="q">${n}</span>`:'';
     const btn=(p,emo)=>`<button class="prod${p.foto?' cf':''}" data-p="${p.id}">${p.foto?imgFoto(p):emo?`<span class="e">${esc(emoDe(p))}</span>`:''}${esc(p.nome)}<span class="p">${brl(p.preco)}</span>${bq(cont[p.id])}</button>`;
@@ -352,6 +373,7 @@ function renderConta(){
       return b}).join('')}</div>`}
   $('#sBody').innerHTML=h;
   $('#sBody').querySelectorAll('[data-ab]').forEach(u=>u.onclick=()=>abrir(u.dataset.ab));
+  $('#bHist').onclick=()=>{verHist=!verHist;renderConta()};
   $('#sBody').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>lancar(b.dataset.p,!!b.closest('.abre')));
   $('#sBody').querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{
     if(Date.now()-travaCat<600)return; // o 2º toque de um toque duplo cairia na grade que acabou de mudar
@@ -361,7 +383,7 @@ function renderConta(){
     const ab=$('#sBody .abre');if(ab)ab.scrollIntoView({block:'nearest',behavior:'smooth'}); // painel inteiro à vista, sem precisar rolar
   });
   $('#sBody').querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{
-    const k=c.itens.map(i=>i.p).lastIndexOf(b.dataset.m);if(k<0)return;const it=c.itens.splice(k,1)[0];ultimo=null;salvar();renderConta();toast('Tirou 1 '+it.nome);
+    const k=c.itens.map(i=>i.p).lastIndexOf(b.dataset.m);if(k<0)return;evento(c,{t:Date.now(),k:'-',n:c.itens[k].nome});const it=c.itens.splice(k,1)[0];ultimo=null;salvar();renderConta();toast('Tirou 1 '+it.nome);
   });
   $('#bFechar').textContent=c.status==='paga'?'Reabrir':'Fechar conta';
   $('#bFechar').style.display=(c.status==='aberta'&&!c.itens.length)?'none':'';
@@ -372,6 +394,7 @@ function lancar(pid,deCat){
   const p=produtos.find(x=>x.id===pid);if(!p)return;
   ultimo=pid;ultimoT=agora;
   if(deCat){catAberta=null;travaCat=agora}
+  evento(c,{t:agora,k:'+',n:p.nome}); // antes do push: conta antiga monta o histórico com os itens de antes
   c.itens.push({p:p.id,nome:p.nome,preco:p.preco,t:agora});c.t=agora;
   salvar();renderConta();toast('+1 '+p.nome);if(navigator.vibrate)navigator.vibrate(20);
 }
@@ -380,14 +403,15 @@ $('#bVolta').onclick=()=>{
   $('#sheet').classList.remove('on');aberta=null;$('#nome').value='';render()};
 $('#bFechar').onclick=()=>{
   const c=aberta,f=$('#fechar');
-  if(c.status==='paga'){c.status=c.forma=c.pagoDia=undefined;c.status='aberta';delete c.forma;delete c.pagoDia;salvar();toast('Reaberta');renderConta();return}
+  if(c.status==='paga'){evento(c,{t:Date.now(),k:'reabriu'});c.status='aberta';delete c.forma;delete c.pagoDia;delete c.pagoEm;salvar();toast('Reaberta');renderConta();return}
   if(f.classList.contains('on')){f.classList.remove('on');renderConta();return}
   f.innerHTML=`<button class="btn b4" data-f="pix">Pix ${brl(total(c))}</button><button class="btn b3" data-f="dinheiro">Dinheiro ${brl(total(c))}</button>${c.status==='aberta'?'<button class="btn b2 w" data-f="dev">Ficou devendo</button>':''}`;
   f.classList.add('on');renderConta(); // fechando: o total aparece
   f.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{
     const k=b.dataset.f;
-    if(k==='dev'){c.status='devendo';toast(c.nome+' ficou devendo')}
-    else{c.status='paga';c.forma=k;c.pagoDia=dia;toast(c.nome+' pagou no '+(k==='pix'?'Pix':'dinheiro'))}
+    const agora=Date.now();
+    if(k==='dev'){c.status='devendo';c.devendoEm=agora;evento(c,{t:agora,k:'devendo'});toast(c.nome+' ficou devendo')}
+    else{c.status='paga';c.forma=k;c.pagoDia=dia;c.pagoEm=agora;evento(c,{t:agora,k:'pagou',f:k});toast(c.nome+' pagou no '+(k==='pix'?'Pix':'dinheiro'))}
     salvar();f.classList.remove('on');$('#bVolta').onclick();
   });
 };
@@ -417,6 +441,8 @@ function abrirResumo(){
   h+=`<h3>Caixa</h3>${l('Pix',brl(r.pix))}${l('Dinheiro',brl(r.din))}${l('Total recebido',brl(r.pix+r.din),'big')}`;
   if(r.fiadoRec)h+=`<div style="font-size:14px;color:#666">inclui ${brl(r.fiadoRec)} de dívidas antigas pagas hoje</div>`;
   h+=`<h3>Vendas de hoje</h3>${l('Clientes',r.n)}${l('Vendido',brl(r.vend))}${l('Ficou devendo hoje',brl(r.novoDev.reduce((s,c)=>s+total(c),0)))}${l('Total devendo (todos os dias)',brl(r.dvTot))}`;
+  const pgs=contas.filter(c=>c.status==='paga'&&c.pagoDia===dia).sort((a,b)=>(a.pagoEm||0)-(b.pagoEm||0));
+  if(pgs.length)h+=`<h3>Pagamentos</h3>${pgs.map(c=>l((c.pagoEm?hora(c.pagoEm)+' · ':'')+esc(c.nome)+' · '+(c.forma==='pix'?'Pix':'dinheiro')+(c.dia!==dia?' (dívida de '+dbr(c.dia)+')':''),brl(total(c)))).join('')}`;
   h+=`<h3>Por produto</h3>${r.prods.map(([n,x])=>l(x.q+'× '+esc(n),brl(x.v))).join('')||'<div style="color:#888">nada vendido</div>'}`;
   $('#rBody').innerHTML=h;
   const t=`*Bar - resumo ${new Date().toLocaleDateString('pt-BR')}*\nPix: ${brl(r.pix)}\nDinheiro: ${brl(r.din)}\n*Recebido: ${brl(r.pix+r.din)}*\nVendido hoje: ${brl(r.vend)} (${r.n} clientes)\nFicou devendo hoje: ${brl(r.novoDev.reduce((s,c)=>s+total(c),0))}${r.novoDev.length?' ('+r.novoDev.map(c=>c.nome).join(', ')+')':''}\nTotal devendo: ${brl(r.dvTot)}\n\n*Produtos*\n${r.prods.map(([n,x])=>x.q+'x '+n+' = '+brl(x.v)).join('\n')}`;
