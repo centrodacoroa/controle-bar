@@ -116,13 +116,23 @@ a.btn{display:block;text-align:center;text-decoration:none}
 .gm{grid-column:1/-1;display:flex;align-items:center;gap:6px;font-size:13px;color:#777}
 .gm select{flex:1;font-size:15px;padding:6px;border:1px solid #ccc;border-radius:8px;background:#fff}
 .gadd{width:100%;border:1px dashed #1f5c3a;background:transparent;color:#1f5c3a;border-radius:10px;padding:10px;font-size:15px;font-weight:700}
+.rl{display:flex;align-items:center;gap:8px;margin-bottom:6px}.rl .res{flex:1;min-width:0;margin:0}
+#bPrecos.falta{background:#fff3cd;border-color:#e8d48a;font-weight:700}
+.px{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 12px 0}.px .btn{padding:12px 6px;font-size:16px}
+#pForm{max-height:60vh;overflow:auto;padding:0 12px;flex:none}
+.pfil{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:10px 12px 0}
+.pfil button{border:0;border-radius:10px;padding:10px 2px;font-size:14px;font-weight:700;background:#eee;color:#555}.pfil button.on{background:#1f5c3a;color:#fff}
+.pc h4{margin:14px 0 4px;font-size:15px;color:#1f5c3a;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.pc h4 button,.pl .okk{border:0;border-radius:8px;background:#e3f1e8;color:#1f5c3a;font-size:13px;font-weight:700;padding:8px 10px}
+.pl{display:flex;align-items:center;gap:8px;border-bottom:1px solid #eee;padding:6px 0;font-size:16px}.pl span{flex:1;min-width:0}.pl small{display:block;color:#b26b00;font-size:12px}
+.pl input{width:96px;font-size:20px;padding:10px 8px;border:2px solid #cfd8d2;border-radius:10px;text-align:right}.pl.f input{border-color:#e8b84a;background:#fffaf0}
 .dif{border-radius:10px;padding:10px;margin:8px 0;font-size:15px;background:#e3f1e8;color:#1f5c3a}.dif.ruim{background:#fbe3e1;color:#7a1712}
 </style>
 </head>
 <body>
 <div class="top">
   <div class="cab"><img class="logo" src="logo.png" alt="Centro da Coroa F.C."><b id="dia"></b><button class="ic" id="bResumo">Fechar dia</button><button class="ic" id="bDono">⚙︎</button></div>
-  <div class="res" id="res"></div>
+  <div class="rl"><div class="res" id="res"></div><button class="ic" id="bPrecos">💲 Preços</button></div>
   <input id="nome" placeholder="Escreva o nome…" autocomplete="off" autocapitalize="words">
   <button class="novo" id="novo"></button>
   <div class="dup" id="dup"></div>
@@ -147,6 +157,14 @@ a.btn{display:block;text-align:center;text-decoration:none}
   <div class="abas"><button data-aba="estoque">Estoque</button><button data-aba="produtos">Produtos e preços</button></div>
   <div class="pb dono" id="dBody"></div>
   <div class="pf" style="grid-template-columns:1fr 1fr"><button class="b1" id="dVolta">Fechar</button><button class="b3" id="dAdd">+ Categoria</button></div>
+</div></div>
+<div class="sheet" id="precos"><div class="panel">
+  <div class="ph"><h2>Preços e produtos</h2></div>
+  <div class="px"><button class="btn b3" id="pNovo">+ Novo produto</button><button class="btn b4" id="pEnviar">Enviar preços</button></div>
+  <div id="pForm"></div>
+  <div class="pfil" id="pFil"></div>
+  <div class="pb" id="pBody"></div>
+  <div class="pf" style="grid-template-columns:1fr"><button class="b1" id="pVolta">✓ Pronto</button></div>
 </div></div>
 <div class="toast" id="toast"></div>
 <input type="file" id="fotoArq" accept="image/*" style="display:none">
@@ -206,9 +224,49 @@ const fotoPadrao=nome=>FOTOS[Object.keys(FOTOS).find(k=>normal(k)===normal(nome)
 const cardapio=()=>CARD0.map((x,i)=>({id:'m'+(i+1),e:'',nome:x[1],preco:x[2],cat:x[0],foto:fotoPadrao(x[1])||undefined}));
 /* os 12 produtos de exemplo da primeira versão: saem na migração (a não ser que tenham estoque lançado) */
 const EXEMPLOS={p1:'Cerveja lata',p2:'Cerveja 600',p3:'Refri lata',p4:'Água',p5:'Coxinha',p6:'Salgadinho',p7:'Bala',p8:'Chocolate',p9:'Sorvete',p10:'Pirulito',p11:'Energético',p12:'Cachorro-quente'};
-const PADRAO_TOP=['Original','Heineken','Brahma','Coca-Cola','Coxinha','Red Bull'];
+/* cardápio v2 (fotos do bar, 24/11/2026). CATS0/CARD0 acima são a v1 e ficam só para atualizar celulares antigos.
+ preco 0 = falta preço (não aparece na tela de lançar); est:true = preço estimado, a conferir. */
+const CATS2=[['cerveja','🍺','Cerveja 600 ml'],['longneck','🍾','Long neck'],['lata','🍻','Cerveja lata'],['mistas','🍹','Ice e mistas'],
+ ['refri','🥤','Refrigerante'],['suco','🧃','Suco'],['agua','💧','Água'],['isoton','🏃','Gatorade e chás'],['energetico','⚡','Energético'],
+ ['salgado','🥟','Salgado'],['lanche','🌭','Lanche'],['cafe','☕','Café'],['porcao','🧀','Porção'],['salgadinho','🍟','Salgadinho'],['kital','🥜','Ki-tal'],
+ ['sorvete','🍦','Paleta'],['dose','🥃','Dose'],['chocolate','🍫','Chocolate'],['bala','🍬','Bala'],['doce','🍭','Doce']];
+const NOVOS2={cerveja:['Amstel','Antarctica'],
+ longneck:['Heineken long neck','Heineken 0.0 long neck','Praya','Corona long neck'],
+ lata:['Heineken 0.0 lata 269 ml','Heineken 0.0 lata 350 ml','Heineken Ultimate','Amstel 0.0'],
+ mistas:['Skol Beats azul','Skol Beats vermelha','Smirnoff Ice','Amstel Vibes Lemon','Schweppes Mixed Spritz'],
+ refri:['Guaraná Antarctica Zero','Sprite Zero','Fanta Uva','Schweppes Citrus','Tônica Antarctica','FYS Guaraná'],
+ suco:['Del Valle lata Manga','Del Valle Kapo Uva'],agua:['Mamba Water'],
+ isoton:['Gatorade Laranja','Gatorade Tangerina','Gatorade Uva','Gatorade Berry Blue','Gatorade Limão','Guaraviton','Guaraviton Açaí','H2OH! Limão','H2OH! Limoneto'],
+ energetico:['Monster','Monster Zero','Monster Rio Punch'],salgado:['Empadinha','Pão de queijo'],cafe:['Café','Café com leite'],
+ porcao:['Mussarela nozinho','Salame'],
+ kital:['Amendoim alho','Amendoim frito','Amendoim japonês','Amendoim salgado sem pele','Amendoim com chocolate','Crocante','Ovinhos de amendoim','Salgadinho calabresa','Pastel churrasco','Bala de goma','Bala colorida'],
+ sorvete:[['Paleta frutada',7],['Paleta cremosa',7],['Paleta recheada',11]],
+ dose:['Velho Barreiro','Pitú','Cariri Ouro','Cynar','Contini','Black Label',"Jack Daniel's"],
+ chocolate:['Bis Xtra Original','Bis Xtra Oreo','Laka','Diamante Negro','Lacta ao Leite','Ouro Branco','Stak'],
+ bala:['Trident Hortelã','Trident Morango','Trident Melancia'],doce:['Pingo de Ouro','Bananinha','Bananinha sem açúcar']};
+const SAI2=['Brahma','Skol','Kibe','Enroladinho de salsicha','Pastel','Chicabon','Fruttare','Eskibon','Cornetto','Magnum','Bis','Kit Kat','Snickers','Prestígio','Sonho de Valsa','Bala Fini','Bala avulsa','Pirulito','Paçoca','Pé de moleque','Doce de leite'];
+const MUDA2={'Esfiha de carne':'Esfiha','Trident':'Trident Menta Verde','Halls':'Halls Extra Forte'};
+const CERTO2=['Original','Heineken','Corona','Coca-Cola','Coca-Cola Zero','Guaraná Antarctica','Fanta Laranja','Sprite']; // preços que vieram do bar
+const CARD_V=2;
+function cardapio2(){
+  const v1={};CARD0.forEach(x=>v1[x[1]]=x);
+  // só mexe no que ainda é do cardápio v1 (mesmo nome e preço): o que o dono criou ou acertou fica como está
+  produtos=produtos.filter(p=>!(SAI2.includes(p.nome)&&v1[p.nome]&&p.preco===v1[p.nome][2]&&!String(p.foto||'').startsWith('data:')));
+  produtos.forEach(p=>{const o=v1[p.nome];if(!o)return;
+    if(p.preco===o[2]&&!CERTO2.includes(p.nome))p.est=true;
+    if(MUDA2[p.nome]){p.nome=MUDA2[p.nome];if(p.nome==='Halls Extra Forte'&&p.foto==='fotos/halls.jpg')p.foto=''}});
+  const tem=new Set(produtos.map(p=>normal(p.nome)));
+  Object.entries(NOVOS2).forEach(([cat,l])=>l.forEach(x=>{const [nome,preco]=Array.isArray(x)?x:[x,cat==='cerveja'?18:cat==='refri'?10:0];
+    if(tem.has(normal(nome)))return;
+    const p={id:'n'+normal(nome).replace(/ /g,''),e:'',nome,preco,cat,foto:''};if(preco&&cat!=='sorvete')p.est=true;produtos.push(p)}));
+  const usadas=new Set(produtos.map(p=>p.cat)), ant={}, nomeV1={};cats.forEach(c=>ant[c.id]=c);CATS0.forEach(c=>nomeV1[c.id]=c.nome);
+  const base=CATS2.filter(c=>ant[c[0]]||usadas.has(c[0])).map(([id,e,nome])=>ant[id]&&ant[id].nome!==nomeV1[id]?ant[id]:{id,e,nome});
+  cats=base.concat(cats.filter(c=>!CATS2.some(x=>x[0]===c.id)));
+  cardV=CARD_V;
+}
+const PADRAO_TOP=['Original','Heineken','Amstel','Coca-Cola','Coxinha','Red Bull'];
 let produtos=cardapio(), cats=CATS0.map(c=>({...c}));
-let fotosV=FOTOS_V, contas=[], mov=[], aberta=null, db=null, ultimo=null, ultimoT=0, verDevendo=false, catAberta=null, travaCat=0, topIds=[];
+let cardV=0, fotosV=FOTOS_V, contas=[], mov=[], aberta=null, db=null, ultimo=null, ultimoT=0, verDevendo=false, catAberta=null, travaCat=0, topIds=[];
 let dia=hoje();
 
 /* Estado salvo sem "cats" = versão antiga: troca os exemplos pelo cardápio sem perder nada.
@@ -228,21 +286,23 @@ function migrar(){
     });
     produtos=novos.concat(manter);
   }
+  if(cardV<CARD_V)cardapio2();
   const v=ids();produtos.forEach(p=>{if(!v.has(p.cat))p.cat=''});
   /* foto: undefined = nunca teve (pode ganhar a do app); '' = o dono tirou; 'fotos/…' = do app; 'data:…' = tirada no celular */
   // v2 (fotos do bar): até a v1 o app gravava '' em quem não tinha foto do app, então nessa subida '' também recebe a foto nova
   if(fotosV<FOTOS_V){produtos.forEach(p=>{if(p.foto===undefined||(fotosV<2&&p.foto==='')){const f=fotoPadrao(p.nome);if(f)p.foto=f}});fotosV=FOTOS_V}
 }
-const estado=()=>({produtos,contas,mov,cats,fotosV});
-function aplicar(s){contas=s.contas||[];mov=s.mov||[];fotosV=s.fotosV||0;if(Array.isArray(s.produtos)){produtos=s.produtos;cats=Array.isArray(s.cats)?s.cats:undefined}migrar()}
+const estado=()=>({produtos,contas,mov,cats,fotosV,cardV});
+function aplicar(s){contas=s.contas||[];mov=s.mov||[];if(Array.isArray(s.produtos)){fotosV=s.fotosV||0;cardV=s.cardV||0;produtos=s.produtos;cats=Array.isArray(s.cats)?s.cats:undefined}migrar()}
 
 const LS='bar_v2';
 function salvarLocal(){try{localStorage.setItem(LS,JSON.stringify(estado()))}catch(e){
   toast('⚠︎ Memória do app cheia: não salvou! Apague fotos tiradas no celular e envie o backup.',6000)}}
-function carregarLocal(){try{const raw=localStorage.getItem(LS), s=JSON.parse(raw||'null');if(!s)return;
+function carregarLocal(){try{const raw=localStorage.getItem(LS), s=JSON.parse(raw||'null');if(!s){migrar();return}
+  if((s.cardV||0)<CARD_V)try{if(!localStorage.getItem('bar_antes_cardapio2'))localStorage.setItem('bar_antes_cardapio2',raw)}catch(e){} // cópia de antes; falta de espaço não pode impedir de abrir
   const antigo=!Array.isArray(s.cats);
-  if(antigo&&!localStorage.getItem('bar_antes_categorias'))localStorage.setItem('bar_antes_categorias',raw); // cópia intacta de antes da migração
-  aplicar(s);if(antigo||(s.fotosV||0)<FOTOS_V)salvarLocal()}catch(e){}}
+  if(antigo)try{if(!localStorage.getItem('bar_antes_categorias'))localStorage.setItem('bar_antes_categorias',raw)}catch(e){} // cópia intacta de antes da migração
+  aplicar(s);if(antigo||(s.fotosV||0)<FOTOS_V||(s.cardV||0)<CARD_V)salvarLocal()}catch(e){}}
 let tmr=null;
 function salvar(){salvarLocal();if(!db)return;clearTimeout(tmr);tmr=setTimeout(()=>{
   db.collection('bar').doc('estado').set({json:JSON.stringify(estado()),t:Date.now()}).catch(()=>{});
@@ -256,14 +316,15 @@ function porCat(){
 }
 /* foto que não carregar (sem internet e fora do cache) some e o botão fica só com o nome */
 const imgFoto=p=>`<img class="fi" src="${esc(p.foto)}" alt="" loading="lazy" onerror="this.remove()">`;
+const vendaveis=()=>porCat().map(g=>({...g,itens:g.itens.filter(p=>p.preco>0)})).filter(g=>g.itens.length);
 const emoDe=p=>p.e||(cats.find(c=>c.id===p.cat)||{}).e||'📦';
 const optsProd=sel=>porCat().filter(g=>g.itens.length).map(g=>`<optgroup label="${esc(g.e+' '+g.nome)}">${g.itens.map(x=>`<option value="${x.id}"${x.id===sel?' selected':''}>${esc(x.nome)}</option>`).join('')}</optgroup>`).join('');
 /* faixa "Mais pedidos": os 6 que mais venderam nos últimos 4 dias com venda; completa com os padrões */
 function maisPedidos(){
-  const ds=diasMov(), n={}, existe=new Set(produtos.map(p=>p.id));
+  const ds=diasMov(), n={}, existe=new Set(produtos.filter(p=>p.preco>0).map(p=>p.id));
   contas.forEach(c=>{if(ds.includes(c.dia))c.itens.forEach(i=>{if(existe.has(i.p))n[i.p]=(n[i.p]||0)+1})});
   const top=Object.keys(n).sort((a,b)=>n[b]-n[a]).slice(0,6);
-  PADRAO_TOP.forEach(nm=>{if(top.length>=6)return;const p=produtos.find(x=>normal(x.nome)===normal(nm));if(p&&!top.includes(p.id))top.push(p.id)});
+  PADRAO_TOP.forEach(nm=>{if(top.length>=6)return;const p=produtos.find(x=>normal(x.nome)===normal(nm)&&x.preco>0);if(p&&!top.includes(p.id))top.push(p.id)});
   return top;
 }
 
@@ -361,23 +422,24 @@ function renderConta(){
   if(!trav){const cont={};c.itens.forEach(i=>cont[i.p]=(cont[i.p]||0)+1);
     const bq=n=>n?`<span class="q">${n}</span>`:'';
     const btn=(p,emo)=>`<button class="prod${p.foto?' cf':''}" data-p="${p.id}">${p.foto?imgFoto(p):emo?`<span class="e">${esc(emoDe(p))}</span>`:''}${esc(p.nome)}<span class="p">${brl(p.preco)}</span>${bq(cont[p.id])}</button>`;
-    const top=topIds.map(id=>produtos.find(p=>p.id===id)).filter(Boolean);
+    const top=topIds.map(id=>produtos.find(p=>p.id===id)).filter(p=>p&&p.preco>0);
     if(top.length)h+=`<div class="tit">Mais pedidos</div><div class="prods">${top.map(p=>btn(p,1)).join('')}</div>`;
-    const gs=porCat().filter(g=>g.itens.length), ia=gs.findIndex(g=>g.id===catAberta);
+    const gs=vendaveis(), ia=gs.findIndex(g=>g.id===catAberta);
     if(ia<0)catAberta=null;
     const ins=ia<0?-1:Math.min(Math.floor(ia/3)*3+2,gs.length-1); // painel entra logo abaixo da linha da categoria tocada
     h+=`<div class="tit" style="margin-top:16px">Categorias</div><div class="cats">${gs.map((g,i)=>{
       const n=g.itens.reduce((s,p)=>s+(cont[p.id]||0),0);
       let b=`<button class="cat${i===ia?' on':''}" data-c="${g.id}"><span class="e">${esc(g.e)}</span>${esc(g.nome)}${g.itens.length===1?`<span class="p">${brl(g.itens[0].preco)}</span>`:''}${bq(n)}</button>`;
       if(i===ins){const a=gs[ia];b+=`<div class="abre">${a.itens.map(p=>btn(p,0)).join('')}</div>`}
-      return b}).join('')}</div>`}
+      return b}).join('')}</div><button class="gadd" id="cNovo" style="margin-top:14px">+ Cadastrar produto que faltou</button>`}
   $('#sBody').innerHTML=h;
   $('#sBody').querySelectorAll('[data-ab]').forEach(u=>u.onclick=()=>abrir(u.dataset.ab));
+  if($('#cNovo'))$('#cNovo').onclick=()=>abrirPrecos(true);
   $('#bHist').onclick=()=>{verHist=!verHist;renderConta()};
   $('#sBody').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>lancar(b.dataset.p,!!b.closest('.abre')));
   $('#sBody').querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{
     if(Date.now()-travaCat<600)return; // o 2º toque de um toque duplo cairia na grade que acabou de mudar
-    const g=porCat().find(x=>x.id===b.dataset.c);if(!g||!g.itens.length)return;
+    const g=vendaveis().find(x=>x.id===b.dataset.c);if(!g||!g.itens.length)return;
     if(g.itens.length===1){lancar(g.itens[0].id,false);return}
     catAberta=catAberta===g.id?null:g.id;renderConta();
     const ab=$('#sBody .abre');if(ab)ab.scrollIntoView({block:'nearest',behavior:'smooth'}); // painel inteiro à vista, sem precisar rolar
@@ -391,7 +453,7 @@ function renderConta(){
 function lancar(pid,deCat){
   const c=aberta, agora=Date.now();if(!c||c.status!=='aberta')return;
   if(pid===ultimo&&agora-ultimoT<800){toast('Toque duplo ignorado');return}
-  const p=produtos.find(x=>x.id===pid);if(!p)return;
+  const p=produtos.find(x=>x.id===pid);if(!p||!(p.preco>0))return;
   ultimo=pid;ultimoT=agora;
   if(deCat){catAberta=null;travaCat=agora}
   evento(c,{t:agora,k:'+',n:p.nome}); // antes do push: conta antiga monta o histórico com os itens de antes
@@ -466,7 +528,7 @@ function renderProdutos(){
   $('#dBody').innerHTML=h;
   const B=$('#dBody');
   B.querySelectorAll('[data-pid]').forEach(inp=>inp.onchange=()=>{const p=produtos.find(x=>x.id===inp.dataset.pid);if(!p)return;
-    if(inp.dataset.k==='preco'){const v=parseFloat(inp.value.replace(',','.'));if(!isNaN(v)&&v>=0)p.preco=v;else{toast('Preço inválido');inp.value=p.preco.toFixed(2).replace('.',',');return}}
+    if(inp.dataset.k==='preco'){const v=parseFloat(inp.value.replace(',','.'));if(!isNaN(v)&&v>=0){p.preco=v;delete p.est}else{toast('Preço inválido');inp.value=p.preco.toFixed(2).replace('.',',');return}}
     else if(inp.dataset.k==='nome'){const v=inp.value.trim();if(!v){inp.value=p.nome;toast('O nome não pode ficar vazio');return}p.nome=v}
     else p.e=inp.value.trim();
     salvar();toast('Salvo')});
@@ -504,7 +566,7 @@ const BKK='bar_ultimo_backup';
 const ultimoBk=()=>{try{return localStorage.getItem(BKK)}catch(e){return null}};
 async function enviarBackup(){
   const nome='bar-backup-'+hoje()+'.json';
-  const txt=JSON.stringify({app:'controle-bar',versao:4,gerado:new Date().toISOString(),...estado()});
+  const txt=JSON.stringify({app:'controle-bar',versao:5,gerado:new Date().toISOString(),...estado()});
   const arq=new File([txt],nome,{type:'application/json'});
   const marca=()=>{try{localStorage.setItem(BKK,new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))}catch(e){}if($('#dono').classList.contains('on'))renderDono()};
   try{
@@ -634,7 +696,7 @@ function renderDono(){
   donoAba==='estoque'?renderEstoque():renderProdutos();
 }
 document.querySelectorAll('#dono [data-aba]').forEach(b=>b.onclick=()=>{donoAba=b.dataset.aba;renderDono()});
-$('#dVolta').onclick=()=>{$('#dono').classList.remove('on');ultimaDif=null;render()};
+$('#dVolta').onclick=()=>{$('#dono').classList.remove('on');ultimaDif=null;render();botaoPrecos()};
 /* foto tirada no celular (câmera ou galeria): reduz para 300×300 em JPEG (~15 KB) antes de guardar */
 function reduzFoto(arq){return new Promise((ok,erro)=>{const u=URL.createObjectURL(arq), im=new Image();
   im.onload=()=>{const L=300, c=document.createElement('canvas');c.width=c.height=L;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,L,L);
@@ -644,6 +706,88 @@ $('#fotoArq').onchange=async e=>{const f=e.target.files[0], p=produtos.find(x=>x
   try{p.foto=await reduzFoto(f);salvar();toast('Foto salva');renderDono()}catch(er){toast('Não deu para abrir essa imagem')}};
 $('#dAdd').onclick=()=>{const c={id:uid(),e:'📦',nome:'Nova categoria'};cats.push(c);focoDono='[data-cn="'+c.id+'"]';salvar();renderDono()};
 
+
+/* ===== PREÇOS E PRODUTOS (aberto sem PIN, a pedido: só quem tem o link usa) =====
+ Cada celular guarda os próprios dados: "Enviar preços" manda um link que atualiza os preços no outro celular. */
+let pFil='falta';
+const lerPreco=t=>{t=String(t).trim().replace(/r\$|\s/gi,'');if(t.includes(','))t=t.replace(/\./g,'').replace(',','.');return /^\d+(\.\d{1,2})?$/.test(t)?Math.round(parseFloat(t)*100)/100:NaN};
+const faltam=()=>produtos.filter(p=>!(p.preco>0)), conferir=()=>produtos.filter(p=>p.preco>0&&p.est);
+function botaoPrecos(){const n=faltam().length,b=$('#bPrecos');b.textContent=n?'💲 Faltam '+n+' preços':'💲 Preços';b.classList.toggle('falta',n>0)}
+function abrirPrecos(novo){pFil=faltam().length?'falta':conferir().length?'conf':'todos';$('#precos').classList.add('on');$('#pForm').innerHTML='';renderPrecos();if(novo)formNovo()}
+function filtros(){$('#pFil').innerHTML=[['falta','Falta ('+faltam().length+')'],['conf','Conferir ('+conferir().length+')'],['todos','Todos ('+produtos.length+')']].map(([k,t])=>`<button data-fl="${k}" class="${k===pFil?'on':''}">${t}</button>`).join('');
+  $('#pFil').querySelectorAll('button').forEach(b=>b.onclick=()=>{pFil=b.dataset.fl;renderPrecos();$('#pBody').scrollTop=0});botaoPrecos()}
+function renderPrecos(){
+  filtros();
+  const ok=p=>pFil==='todos'||(pFil==='falta'?!(p.preco>0):p.preco>0&&p.est), fmt=p=>p.preco>0?p.preco.toFixed(2).replace('.',','):'';
+  const gs=porCat().map(g=>({...g,itens:g.itens.filter(ok)})).filter(g=>g.itens.length);
+  $('#pBody').innerHTML='<p class="nota">'+(pFil==='falta'?'Escreva o preço e toque em próximo no teclado. Salva sozinho. Sem preço, o produto não aparece para vender.':pFil==='conf'?'Estes preços são estimativa. Corrija, ou toque em ✓ se estiver certo.':'Mudar preço não altera o que já foi lançado.')+'</p>'+
+   (gs.map(g=>`<div class="pc"><h4><span>${esc(g.e+' '+g.nome)}</span>${pFil==='falta'&&g.itens.length>1?`<button data-igual="${esc(g.id)}">mesmo preço p/ todos</button>`:''}</h4>${g.itens.map(p=>`<div class="pl${p.preco>0?'':' f'}"><span>${esc(p.nome)}${p.preco>0&&p.est?'<small>conferir</small>':''}</span>${p.preco>0&&p.est?`<button class="okk" data-ok="${p.id}" aria-label="Preço certo">✓</button>`:''}<input data-pp="${p.id}" inputmode="decimal" enterkeyhint="next" placeholder="R$" aria-label="Preço de ${esc(p.nome)}" value="${fmt(p)}"></div>`).join('')}</div>`).join('')||'<p class="nota">✓ Nada pendente aqui.</p>');
+  const ins=[...$('#pBody').querySelectorAll('[data-pp]')];
+  ins.forEach((i,k)=>{
+    let ini='';i.onfocus=()=>{ini=i.value;i.select()};
+    i.onchange=()=>{if(i.value===ini)return;const p=produtos.find(x=>x.id===i.dataset.pp), v=lerPreco(i.value);if(!p)return;
+      if(!(v>0)){toast('Preço inválido: não mudou',2000);i.value=fmt(p);return}
+      p.preco=v;delete p.est;salvar();filtros();i.value=fmt(p);ini=i.value;const l=i.closest('.pl');l.classList.remove('f');l.querySelectorAll('small,.okk').forEach(x=>x.remove())};
+    i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();ins[k+1]?ins[k+1].focus():i.blur()}};
+  });
+  $('#pBody').querySelectorAll('[data-ok]').forEach(b=>b.onclick=()=>{const p=produtos.find(x=>x.id===b.dataset.ok);delete p.est;salvar();renderPrecos()});
+  $('#pBody').querySelectorAll('[data-igual]').forEach(b=>b.onclick=()=>{
+    const g=porCat().find(x=>x.id===b.dataset.igual), l=g?g.itens.filter(p=>!(p.preco>0)):[];
+    const t=prompt('Preço para os '+l.length+' que faltam:\n'+l.map(p=>p.nome).join(', '));if(t===null)return;
+    const v=lerPreco(t);if(!(v>0)){toast('Preço inválido',2000);return}l.forEach(p=>{p.preco=v;delete p.est});salvar();renderPrecos();toast(l.length+' preços salvos')});
+}
+function formNovo(){
+  $('#pForm').innerHTML=`<div class="cx"><b>Novo produto</b><label>Nome (com o tamanho, se tiver mais de um)</label><input id="nNome" autocapitalize="words" autocomplete="off" placeholder="ex.: Doritos 75 g">
+   <label>Preço</label><input id="nPreco" inputmode="decimal" placeholder="R$ (pode deixar para depois)">
+   <label>Categoria</label><select id="nCat"><option value="">— escolha —</option>${cats.map(c=>`<option value="${esc(c.id)}">${esc(c.e+' '+c.nome)}</option>`).join('')}<option value="+">+ nova categoria</option></select>
+   <div id="nCx" style="display:none"><label>Nome da nova categoria</label><input id="nCatN" autocapitalize="words"></div>
+   <label>Foto (opcional)</label><input id="nFoto" type="file" accept="image/*">
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><button class="btn b1" id="nX">Cancelar</button><button class="btn b3" id="nOk">Salvar</button></div></div>`;
+  $('#nCat').onchange=()=>$('#nCx').style.display=$('#nCat').value==='+'?'':'none';
+  $('#nX').onclick=()=>$('#pForm').innerHTML='';
+  $('#nOk').onclick=async()=>{
+    const nome=cap($('#nNome').value.trim()), tp=$('#nPreco').value.trim(), v=tp?lerPreco(tp):0, cn=cap($('#nCatN').value.trim());let cat=$('#nCat').value;
+    if(!nome){toast('Escreva o nome',2000);return}
+    if(produtos.some(p=>normal(p.nome)===normal(nome))){toast('Já existe: '+nome,2500);return}
+    if(isNaN(v)){toast('Preço inválido',2000);return}
+    if(!cat){toast('Escolha a categoria',2000);return}
+    if(cat==='+'&&!cn){toast('Escreva o nome da categoria',2000);return}
+    const b=$('#nOk');if(b.disabled)return;b.disabled=true;
+    let foto='';const f=$('#nFoto').files[0];if(f)try{foto=await reduzFoto(f)}catch(e){toast('Não deu para abrir a foto',2500);b.disabled=false;return}
+    if(cat==='+'){const j=cats.find(c=>normal(c.nome)===normal(cn));if(j)cat=j.id;else{cat=uid();cats.push({id:cat,e:'📦',nome:cn})}}
+    produtos.push({id:uid(),e:'',nome,preco:v,cat,foto});salvar();$('#pForm').innerHTML='';renderPrecos();toast(v?nome+' cadastrado':nome+' salvo, falta o preço',2000)};
+  $('#nNome').focus();
+}
+function linkPrecos(){
+  const d={v:1,p:produtos.filter(p=>p.preco>0).map(p=>[p.id,p.preco,p.est?1:0,p.nome,p.cat||'']),c:cats.filter(c=>!CATS2.some(x=>x[0]===c.id)).map(c=>[c.id,c.e,c.nome])};
+  return location.href.split('#')[0]+'#precos='+btoa(unescape(encodeURIComponent(JSON.stringify(d)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+$('#pEnviar').onclick=async()=>{
+  const t='Preços do bar. Abra no outro celular para atualizar:\n'+linkPrecos();
+  if(navigator.share){try{await navigator.share({text:t});return}catch(e){if(e&&e.name==='AbortError')return}}
+  window.open('https://wa.me/?text='+encodeURIComponent(t),'_blank','noopener');
+};
+/* o link vem de fora: só aceita id simples, preço numérico e texto curto; nada muda sem o OK */
+function receberPrecos(){
+  const m=location.hash.match(/precos=([A-Za-z0-9_-]+)/);if(!m)return;
+  history.replaceState(null,'',location.pathname);
+  let d;try{d=JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g,'+').replace(/_/g,'/')))));if(!Array.isArray(d.p))throw 0}catch(e){toast('Link de preços inválido',3000);return}
+  const id=x=>typeof x==='string'&&/^[a-z0-9]{1,60}$/i.test(x), tx=x=>typeof x==='string'&&x.trim()&&x.length<=60;
+  const l=d.p.filter(x=>Array.isArray(x)&&id(x[0])&&typeof x[1]==='number'&&x[1]>0&&x[1]<100000&&tx(x[3]));
+  const acha=x=>produtos.find(p=>p.id===x[0])||produtos.find(p=>normal(p.nome)===normal(x[3]));
+  const muda=l.filter(x=>{const p=acha(x);return p&&(p.preco!==x[1]||!!p.est!==!!x[2])}), novos=l.filter(x=>!acha(x));
+  if(!muda.length&&!novos.length){toast('Os preços já estão iguais',3000);return}
+  if(!confirm('Atualizar este celular?\n'+muda.length+' preços e '+novos.length+' produtos novos.\nAs contas não mudam.'))return;
+  (Array.isArray(d.c)?d.c:[]).forEach(c=>{if(Array.isArray(c)&&id(c[0])&&tx(c[2])&&!cats.some(k=>k.id===c[0]))cats.push({id:c[0],e:String(c[1]||'📦').slice(0,8),nome:c[2].trim()})});
+  muda.forEach(x=>{const p=acha(x);p.preco=x[1];if(x[2])p.est=true;else delete p.est});
+  novos.forEach(x=>{const p={id:x[0],e:'',nome:x[3].trim(),preco:x[1],cat:cats.some(c=>c.id===x[4])?x[4]:'',foto:''};if(x[2])p.est=true;produtos.push(p)});
+  salvar();render();botaoPrecos();if(aberta)renderConta();if($('#precos').classList.contains('on'))renderPrecos();toast('Preços atualizados',3000);
+}
+$('#pNovo').onclick=formNovo;
+$('#bPrecos').onclick=()=>abrirPrecos();
+$('#pVolta').onclick=()=>{if(document.activeElement)document.activeElement.blur();if($('#nNome')&&$('#nNome').value.trim()&&!confirm('Sair sem salvar o produto novo?'))return;
+  $('#precos').classList.remove('on');$('#pForm').innerHTML='';topIds=maisPedidos();aberta?renderConta():render()};
+setTimeout(receberPrecos,300);window.addEventListener('hashchange',receberPrecos);
 
 /* ===== ENTRADA PRONTA (lida de foto da nota/pedido) =====
  Chega pelo link  ...#entrada=<base64url de {"itens":[{"nome":"Brahma lata","q":48,"custo":120}]}>
@@ -680,13 +824,13 @@ async function abrirEntrada(d){
       const p=produtos.find(x=>x.id===pid);const m={id:uid(),tipo:'compra',p:pid,q,t:agora};if(v>0){m.custo=v;p.custo=v/q}
       mov.push(m);n++});
     if(!n){toast('Nada para lançar');return}
-    ultimaDif=`<div class="dif"><b>${n} produto(s) lançados</b> pela foto.${produtos.some(p=>!p.preco)?' Tem produto novo sem preço de venda: acerte em "Produtos e preços".':''}</div>`;
+    ultimaDif=`<div class="dif"><b>${n} produto(s) lançados</b> pela foto.${produtos.some(p=>!p.preco)?' Tem produto novo sem preço de venda: acerte em "💲 Preços" na tela inicial.':''}</div>`;
     salvar();renderEstoque();toast('Entrada lançada')};
 }
 {const d=lerEntrada();if(d)setTimeout(()=>abrirEntrada(d),300)}
 
 setInterval(()=>{if(hoje()!==dia&&!aberta)render()},60000);
-render();
+render();botaoPrecos();
 
 /* proteção dos dados no aparelho */
 try{if(!localStorage.getItem('bar_copia_'+hoje()))salvarCopiaSeguranca()}catch(e){}
