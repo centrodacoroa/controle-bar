@@ -3,6 +3,7 @@
 create schema if not exists bar;
 revoke all on schema bar from public, anon, authenticated;
 create table if not exists bar.bares (id int generated always as identity primary key, nome text unique not null, hash bytea unique not null);
+alter table bar.bares add column if not exists aberto boolean not null default false;  -- true: o endereço comum entra com 'aberto-<nome>'
 create sequence if not exists bar.rev;
 create table if not exists bar.docs (
   bar int not null references bar.bares(id) on delete cascade,
@@ -11,13 +12,20 @@ create table if not exists bar.docs (
 create index if not exists docs_rev on bar.docs (bar, rev);
 alter table bar.bares enable row level security;
 alter table bar.docs enable row level security;
+-- cópia do que foi alterado ou apagado (para recuperar); ninguém acessa pela API
+create table if not exists bar.antigos (id bigint generated always as identity primary key, bar int not null, k text not null, v jsonb, del boolean, rev bigint, em timestamptz not null default now());
+alter table bar.antigos enable row level security;
+create or replace function bar.guarda() returns trigger language plpgsql security definer set search_path = '' as $$
+begin if old.v is distinct from new.v or old.del is distinct from new.del then insert into bar.antigos(bar,k,v,del,rev) values (old.bar,old.k,old.v,old.del,old.rev); end if; return new; end $$;
+drop trigger if exists guarda on bar.docs;
+create trigger guarda before update on bar.docs for each row execute function bar.guarda();
 
 create or replace function public.bar_sync(p_chave text, p_desde bigint, p_ops jsonb default '[]'::jsonb)
 returns jsonb language plpgsql volatile security definer set search_path = '' as $$
 declare b int; o jsonb; kk text; vv jsonb; cid text; r jsonb; n int;
 begin
   if p_chave is null or length(p_chave) < 20 or length(p_chave) > 100 then return jsonb_build_object('erro','chave'); end if;
-  select id into b from bar.bares where hash = sha256(convert_to(p_chave,'UTF8'));
+  select id into b from bar.bares where hash = sha256(convert_to(p_chave,'UTF8')) or (aberto and p_chave = 'aberto-'||nome);
   if b is null then return jsonb_build_object('erro','chave'); end if;
   if jsonb_typeof(p_ops) <> 'array' or jsonb_array_length(p_ops) > 300 or length(p_ops::text) > 2000000 then
     return jsonb_build_object('erro','tamanho'); end if;

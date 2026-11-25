@@ -838,7 +838,10 @@ setTimeout(receberPrecos,300);window.addEventListener('hashchange',receberPrecos
  Registros: p:produto k:categoria c:conta i:conta:item h:conta:evento m:estoque. Item é registro próprio: dois celulares podem lançar
  na mesma conta ao mesmo tempo. A chave pública abaixo não abre nada sem o segredo do link, que não fica no código. */
 const SB_URL='https://byaazwxzabkipwehddtz.supabase.co', SB_KEY='sb_publishable_VCJlNdphfw_6-Rc1McscbA_PYPNqkct';
-const CHK='bar_chave', chave=()=>{try{return localStorage.getItem(CHK)}catch(e){return null}};
+/* aberto a pedido (25/11/2026): o endereço comum liga sozinho e vê tudo. Para fechar: no banco, update bar.bares set aberto=false;
+ aí só entra quem abriu o link secreto. */
+const ABERTO=location.hostname==='centrodacoroa.github.io'?'aberto-centro-da-coroa':null;
+const CHK='bar_chave', secreta=()=>{try{return localStorage.getItem(CHK)}catch(e){return null}}, chave=()=>secreta()||ABERTO;
 let rodando=false, denovo=false, tSync=null, falhas=0, ultimoOk=0, erroSync='';
 const canon=v=>Array.isArray(v)?'['+v.map(canon).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).filter(k=>v[k]!==undefined).sort().map(k=>JSON.stringify(k)+':'+canon(v[k])).join(',')+'}':JSON.stringify(v);
 function imp(v){const s=canon(v);let a=0xdeadbeef,b=0x41c6ce57;for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);a=Math.imul(a^c,2654435761);b=Math.imul(b^c,1597334677)}
@@ -865,7 +868,7 @@ const ID=/^[A-Za-z0-9_-]{1,60}$/;
 function poe(lista,id,v){let o=lista.find(x=>x.id===id);if(!o){o={id};lista.push(o)}Object.keys(o).forEach(k=>{if(k!=='id')delete o[k]});Object.assign(o,v,{id});return o}
 function aplicaDoc(k,v,d){
   const [t,a,b]=k.split(':');if(!ID.test(a||''))return;
-  if(t==='p'){if(d)produtos=produtos.filter(x=>x.id!==a);else{const p=poe(produtos,a,v);p.preco=+p.preco||0;p.nome=String(p.nome||'');if(!ID.test(p.cat||''))p.cat=''}}
+  if(t==='p'){if(d)produtos=produtos.filter(x=>x.id!==a);else{const p=poe(produtos,a,v);p.preco=+p.preco||0;p.nome=String(p.nome||'');if(p.foto&&!/^(fotos\/[a-z0-9-]+\.jpg|data:image\/jpeg;base64,[A-Za-z0-9+\/=]+)$/.test(p.foto))p.foto='';if(!ID.test(p.cat||''))p.cat=''}}
   else if(t==='k'){if(d)cats=cats.filter(x=>x.id!==a);else{const c=poe(cats,a,v);c.nome=String(c.nome||'')}}
   else if(t==='m'){if(d)mov=mov.filter(x=>x.id!==a);else poe(mov,a,v)}
   else if(t==='c'){if(d){contas=contas.filter(x=>x.id!==a);return}
@@ -928,18 +931,19 @@ function nuvem(){
   b.textContent=erroSync==='chave'?'⚠ link':falhas?'⚠'+(n||''):'☁ ✓';b.className='ic '+(falhas?'nf':'nk');
 }
 /* primeira vez: junta o que está neste celular com o que já está no banco */
-async function ligar(k){
+async function ligar(k,auto){
   if(rodando)return;
-  const antes=chave(), trocou=antes&&antes!==k;
+  if(auto){rodando=true;try{await rpc(9e15,[])}catch(e){falhas++;erroSync=/chave/.test(e.message)?'chave':'rede';return}finally{rodando=false;nuvem()}}
+  const antes=secreta(), trocou=antes&&antes!==k;
   if(antes===k&&sync.ligado){toast('Este celular já está ligado ✓',2500);sincroniza();return}
-  if(!confirm((trocou?'Trocar a ligação deste celular para outro bar?':'Ligar este celular ao bar online?')+'\nPreços, produtos e contas aparecem em todos os celulares ligados.'))return;
+  if(!auto&&!confirm((trocou?'Trocar a ligação deste celular para outro bar?':'Ligar este celular ao bar online?')+'\nPreços, produtos e contas aparecem em todos os celulares ligados.'))return;
   const n=contas.length;let manda=true;
   if(n)manda=confirm('Este celular tem '+n+' conta(s).\n\nOK = juntar com as do bar\nCancelar = são testes, não enviar');
   const np=produtos.filter(p=>p.preco>0).length;let mandaP=true;
   if(np)mandaP=confirm('Este celular tem '+np+' preço(s) preenchido(s).\n\nOK = são os preços certos do bar, enviar\nCancelar = zerar neste celular');
   rodando=true;toast('Ligando…',8000);
   try{
-    localStorage.setItem(CHK,k);
+    if(!auto)localStorage.setItem(CHK,k);
     let docs=[], desde=0, j;do{j=await rpc(desde,[]);docs=docs.concat(j.docs);if(j.docs.length)desde=j.docs[j.docs.length-1].r}while(j.mais);
     try{localStorage.setItem('bar_antes_online',JSON.stringify(estado()))}catch(e){}
     if(!manda){contas=[];mov=[];if(aberta){aberta=null;$('#sheet').classList.remove('on')}}
@@ -971,9 +975,11 @@ async function ligar(k){
 const achaChave=t=>{const m=String(t||'').match(/(?:bar=|^)([A-Za-z0-9_-]{20,100})\s*$/);return m&&m[1]};
 function lerLigacao(){const m=location.hash.match(/^#bar=([A-Za-z0-9_-]{20,100})$/);if(!m)return;history.replaceState(null,'',location.pathname);ligar(m[1])}
 $('#bNuv').onclick=async()=>{
+  if(ABERTO&&!sync.ligado&&erroSync!=='chave'){ligaSozinho();return}
   if(!chave()||!sync.ligado||erroSync==='chave'){const t=prompt('Cole aqui o link secreto do bar:');if(!t)return;const k=achaChave(t.trim());if(k)ligar(k);else toast('Link inválido',2500);return}
   await sincroniza();
   if(falhas){toast('Sem internet. Está tudo guardado neste celular e sobe sozinho depois.',4000);return}
+  if(!secreta()){toast('☁ Online ✓ Tudo salvo',2500);return}
   if(!confirm('Online ✓ Tudo salvo.\n\nLigar outro celular? Envie o link secreto só para quem pode ver as contas.'))return;
   const u=location.origin+location.pathname+'#bar='+chave();
   if(navigator.share){try{await navigator.share({text:'Link secreto do bar (não repasse):\n'+u});return}catch(e){if(e&&e.name==='AbortError')return}}
@@ -981,7 +987,8 @@ $('#bNuv').onclick=async()=>{
 };
 setInterval(()=>{if(!document.hidden&&!(falhas>2&&Date.now()%5))sincroniza()},4000);
 window.addEventListener('online',()=>agendaSync(200));document.addEventListener('visibilitychange',()=>{if(!document.hidden)agendaSync(100)});
-setTimeout(()=>{nuvem();lerLigacao();agendaSync(100)},300);window.addEventListener('hashchange',lerLigacao);
+const ligaSozinho=()=>{if(ABERTO&&!sync.ligado&&!rodando&&!document.hidden&&!/bar=/.test(location.hash))ligar(chave(),true)};
+setTimeout(()=>{nuvem();lerLigacao();ligaSozinho();agendaSync(100)},300);setInterval(()=>{if(erroSync!=='chave')ligaSozinho()},15000);window.addEventListener('online',ligaSozinho);window.addEventListener('hashchange',lerLigacao);
 
 /* ===== ENTRADA PRONTA (lida de foto da nota/pedido) =====
  Chega pelo link  ...#entrada=<base64url de {"itens":[{"nome":"Brahma lata","q":48,"custo":120}]}>

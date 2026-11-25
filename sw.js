@@ -1,6 +1,6 @@
 // Guarda o app no celular para abrir sem internet.
 // Rede primeiro (pega a versão nova quando tem internet), cache como reserva.
-const CACHE = 'controle-bar-v13';
+const CACHE = 'controle-bar-v14';
 const ARQS = ['./', 'index.html', 'manifest.webmanifest', 'logo.png', 'icon-192.png', 'icon-512.png',
   // fotos dos produtos (para aparecerem sem internet)
   'fotos/bala-avulsa.jpg', 'fotos/bala-fini.jpg', 'fotos/halls.jpg', 'fotos/trident.jpg',
