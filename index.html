@@ -315,7 +315,7 @@ function carregarLocal(){try{const raw=localStorage.getItem(LS), s=JSON.parse(ra
   if(antigo)try{if(!localStorage.getItem('bar_antes_categorias'))localStorage.setItem('bar_antes_categorias',raw)}catch(e){} // cópia intacta de antes da migração
   aplicar(s);if(antigo||(s.fotosV||0)<FOTOS_V||(s.cardV||0)<CARD_V)salvarLocal()}catch(e){}}
 let tmr=null;
-function salvar(){const okLocal=salvarLocal();if(!db)return okLocal;clearTimeout(tmr);tmr=setTimeout(()=>{
+function salvar(){completaPrecos();const okLocal=salvarLocal();if(!db)return okLocal;clearTimeout(tmr);tmr=setTimeout(()=>{
   db.collection('bar').doc('estado').set({json:JSON.stringify(estado()),t:Date.now()}).catch(()=>{});
 },500);return okLocal}
 carregarLocal();
@@ -327,15 +327,19 @@ function porCat(){
 }
 /* foto que não carregar (sem internet e fora do cache) some e o botão fica só com o nome */
 const imgFoto=p=>`<img class="fi" src="${esc(p.foto)}" alt="" loading="lazy" onerror="this.remove()">`;
-const vendaveis=()=>porCat().map(g=>({...g,itens:g.itens.filter(p=>p.preco>0)})).filter(g=>g.itens.length);
+const vendaveis=()=>porCat().filter(g=>g.itens.length);
+const precoTxt=p=>p.preco>0?brl(p.preco):'sem preço';
+/* item lançado sem preço (sp): quando o produto ganha preço, as contas ainda não pagas são acertadas */
+function completaPrecos(){contas.forEach(c=>{if(c.status!=='paga')c.itens.forEach(i=>{if(!i.sp)return;const p=produtos.find(x=>x.id===i.p);if(p&&p.preco>0){i.preco=p.preco;delete i.sp}})})}
+const semPreco=c=>[...new Set(c.itens.filter(i=>i.sp).map(i=>i.nome))];
 const emoDe=p=>p.e||(cats.find(c=>c.id===p.cat)||{}).e||'📦';
 const optsProd=sel=>porCat().filter(g=>g.itens.length).map(g=>`<optgroup label="${esc(g.e+' '+g.nome)}">${g.itens.map(x=>`<option value="${x.id}"${x.id===sel?' selected':''}>${esc(x.nome)}</option>`).join('')}</optgroup>`).join('');
 /* faixa "Mais pedidos": os 6 que mais venderam nos últimos 4 dias com venda; completa com os padrões */
 function maisPedidos(){
-  const ds=diasMov(), n={}, existe=new Set(produtos.filter(p=>p.preco>0).map(p=>p.id));
+  const ds=diasMov(), n={}, existe=new Set(produtos.map(p=>p.id));
   contas.forEach(c=>{if(ds.includes(c.dia))c.itens.forEach(i=>{if(existe.has(i.p))n[i.p]=(n[i.p]||0)+1})});
   const top=Object.keys(n).sort((a,b)=>n[b]-n[a]).slice(0,6);
-  PADRAO_TOP.forEach(nm=>{if(top.length>=6)return;const p=produtos.find(x=>normal(x.nome)===normal(nm)&&x.preco>0);if(p&&!top.includes(p.id))top.push(p.id)});
+  PADRAO_TOP.forEach(nm=>{if(top.length>=6)return;const p=produtos.find(x=>normal(x.nome)===normal(nm));if(p&&!top.includes(p.id))top.push(p.id)});
   return top;
 }
 
@@ -429,23 +433,24 @@ function renderConta(){
   if(outras.length&&c.status==='aberta')h+=`<div class="aviso">⚠︎ ${esc(c.nome)} está devendo ${ver?brl(outras.reduce((s,x)=>s+total(x),0))+' ':''}de ${outras.map(x=>dbr(x.dia)).join(', ')}. <u data-ab="${outras[0].id}">Ver</u></div>`;
   if(c.status==='devendo')h+=`<div class="aviso">Ficou devendo desde ${dbr(c.dia)}. Quando pagar, toque em "Fechar conta".</div>`;
   if(c.status==='paga')h+=`<div class="aviso ok">Paga em ${dbr(c.pagoDia)} no ${c.forma==='pix'?'Pix':'dinheiro'}.</div>`;
-  h+=`<div class="lista"><b>Pegou:</b>${Object.keys(g).length?Object.entries(g).map(([pid,x])=>`<div class="pg${pid===ultimo?' novo1':''}"><span><b class="qq">${x.q}×</b> ${esc(x.nome)}</span>${ver?`<b>${brl(x.v)}</b>`:''}${trav?'':`<button class="menos" data-m="${pid}">− tirar 1</button>`}</div>`).join(''):' <span style="color:#888">nada ainda</span>'}<button class="hb" id="bHist">🕒 Horários ${verHist?'▲':'▼'}</button>${verHist?`<div class="hist">${htmlHist(c)}</div>`:''}</div>`;
+  if(ver&&semPreco(c).length)h+=`<div class="aviso">⚠︎ Falta o preço de: ${semPreco(c).map(esc).join(', ')}. O total ainda não inclui. <u id="cFalta">Preencher</u></div>`;
+  h+=`<div class="lista"><b>Pegou:</b>${Object.keys(g).length?Object.entries(g).map(([pid,x])=>`<div class="pg${pid===ultimo?' novo1':''}"><span><b class="qq">${x.q}×</b> ${esc(x.nome)}</span>${ver?`<b>${x.v>0?brl(x.v):'sem preço'}</b>`:''}${trav?'':`<button class="menos" data-m="${pid}">− tirar 1</button>`}</div>`).join(''):' <span style="color:#888">nada ainda</span>'}<button class="hb" id="bHist">🕒 Horários ${verHist?'▲':'▼'}</button>${verHist?`<div class="hist">${htmlHist(c)}</div>`:''}</div>`;
   if(!trav){const cont={};c.itens.forEach(i=>cont[i.p]=(cont[i.p]||0)+1);
     const bq=n=>n?`<span class="q">${n}</span>`:'';
-    const btn=(p,emo)=>`<button class="prod${p.foto?' cf':''}" data-p="${p.id}">${p.foto?imgFoto(p):emo?`<span class="e">${esc(emoDe(p))}</span>`:''}${esc(p.nome)}<span class="p">${brl(p.preco)}</span>${bq(cont[p.id])}</button>`;
-    const top=topIds.map(id=>produtos.find(p=>p.id===id)).filter(p=>p&&p.preco>0);
+    const btn=(p,emo)=>`<button class="prod${p.foto?' cf':''}" data-p="${p.id}">${p.foto?imgFoto(p):emo?`<span class="e">${esc(emoDe(p))}</span>`:''}${esc(p.nome)}<span class="p">${precoTxt(p)}</span>${bq(cont[p.id])}</button>`;
+    const top=topIds.map(id=>produtos.find(p=>p.id===id)).filter(Boolean);
     if(top.length)h+=`<div class="tit">Mais pedidos</div><div class="prods">${top.map(p=>btn(p,1)).join('')}</div>`;
     const gs=vendaveis(), ia=gs.findIndex(g=>g.id===catAberta);
     if(ia<0)catAberta=null;
-    if(!gs.length)h+='<div class="aviso">Nenhum produto com preço ainda. Toque em ✓ Pronto e depois em 💲 Faltam preços.</div>';
     const ins=ia<0?-1:Math.min(Math.floor(ia/3)*3+2,gs.length-1); // painel entra logo abaixo da linha da categoria tocada
     h+=`${gs.length?'<div class="tit" style="margin-top:16px">Categorias</div>':''}<div class="cats">${gs.map((g,i)=>{
       const n=g.itens.reduce((s,p)=>s+(cont[p.id]||0),0);
-      let b=`<button class="cat${i===ia?' on':''}" data-c="${g.id}"><span class="e">${esc(g.e)}</span>${esc(g.nome)}${g.itens.length===1?`<span class="p">${brl(g.itens[0].preco)}</span>`:''}${bq(n)}</button>`;
+      let b=`<button class="cat${i===ia?' on':''}" data-c="${g.id}"><span class="e">${esc(g.e)}</span>${esc(g.nome)}${g.itens.length===1?`<span class="p">${precoTxt(g.itens[0])}</span>`:''}${bq(n)}</button>`;
       if(i===ins){const a=gs[ia];b+=`<div class="abre">${a.itens.map(p=>btn(p,0)).join('')}</div>`}
       return b}).join('')}</div><button class="gadd" id="cNovo" style="margin-top:14px">+ Cadastrar produto que faltou</button>`}
   $('#sBody').innerHTML=h;
   $('#sBody').querySelectorAll('[data-ab]').forEach(u=>u.onclick=()=>abrir(u.dataset.ab));
+  if($('#cFalta'))$('#cFalta').onclick=()=>{$('#fechar').classList.remove('on');abrirPrecos()};
   if($('#cNovo'))$('#cNovo').onclick=()=>abrirPrecos(true);
   $('#bHist').onclick=()=>{verHist=!verHist;renderConta()};
   $('#sBody').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>lancar(b.dataset.p,!!b.closest('.abre')));
@@ -465,11 +470,11 @@ function renderConta(){
 function lancar(pid,deCat){
   const c=aberta, agora=Date.now();if(!c||c.status!=='aberta')return;
   if(pid===ultimo&&agora-ultimoT<800){toast('Toque duplo ignorado');return}
-  const p=produtos.find(x=>x.id===pid);if(!p||!(p.preco>0))return;
+  const p=produtos.find(x=>x.id===pid);if(!p)return;
   ultimo=pid;ultimoT=agora;
   if(deCat){catAberta=null;travaCat=agora}
   evento(c,{t:agora,k:'+',n:p.nome}); // antes do push: conta antiga monta o histórico com os itens de antes
-  c.itens.push({p:p.id,nome:p.nome,preco:p.preco,t:agora});c.t=agora;
+  c.itens.push({p:p.id,nome:p.nome,preco:p.preco>0?p.preco:0,t:agora,...(p.preco>0?{}:{sp:1})});c.t=agora;
   salvar();renderConta();toast('+1 '+p.nome);if(navigator.vibrate)navigator.vibrate(20);
 }
 $('#bVolta').onclick=()=>{
@@ -483,6 +488,7 @@ $('#bFechar').onclick=()=>{
   f.classList.add('on');renderConta(); // fechando: o total aparece
   f.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{
     const k=b.dataset.f;
+    if(k!=='dev'&&semPreco(c).length&&!confirm('Falta o preço de: '+semPreco(c).join(', ')+'.\nFechar mesmo assim? Esses itens ficam de graça.'))return;
     const agora=Date.now();
     if(k==='dev'){c.status='devendo';c.devendoEm=agora;evento(c,{t:agora,k:'devendo'});toast(c.nome+' ficou devendo')}
     else{c.status='paga';c.forma=k;c.pagoDia=dia;c.pagoEm=agora;evento(c,{t:agora,k:'pagou',f:k});toast(c.nome+' pagou no '+(k==='pix'?'Pix':'dinheiro'))}
@@ -734,7 +740,7 @@ function renderPrecos(){
   gravaPendentes();filtros();
   const ok=p=>pFil==='todos'||(pFil==='falta'?!(p.preco>0):p.preco>0&&p.est), fmt=p=>p.preco>0?p.preco.toFixed(2).replace('.',','):'';
   const gs=porCat().map(g=>({...g,itens:g.itens.filter(ok)})).filter(g=>g.itens.length);
-  $('#pBody').innerHTML='<p class="nota">'+(pFil==='falta'?'Escreva o preço: cada um é gravado na hora (✓ salvo). Sem preço, o produto não aparece para vender.':pFil==='conf'?'Estes preços são estimativa. Corrija, ou toque em ✓ se estiver certo.':'Mudar preço não altera o que já foi lançado.')+'</p>'+
+  $('#pBody').innerHTML='<p class="nota">'+(pFil==='falta'?'Escreva o preço: cada um é gravado na hora (✓ salvo). Conta aberta com item sem preço é acertada na hora.':pFil==='conf'?'Estes preços são estimativa. Corrija, ou toque em ✓ se estiver certo.':'Mudar preço não altera o que já foi lançado.')+'</p>'+
    (gs.map(g=>`<div class="pc"><h4><span>${esc(g.e+' '+g.nome)}</span>${pFil==='falta'&&g.itens.length>1?`<button data-igual="${esc(g.id)}">mesmo preço p/ todos</button>`:''}</h4>${g.itens.map(p=>`<div class="pl${p.preco>0?'':' f'}"><span>${esc(p.nome)}${p.preco>0&&p.est?'<small>conferir</small>':''}</span>${p.preco>0&&p.est?`<button class="okk" data-ok="${p.id}" aria-label="Preço certo">✓</button>`:''}<em class="sv"></em><input data-pp="${p.id}" inputmode="decimal" enterkeyhint="next" placeholder="R$" aria-label="Preço de ${esc(p.nome)}" value="${fmt(p)}"></div>`).join('')}</div>`).join('')||'<p class="nota">✓ Nada pendente aqui.</p>');
   const ins=[...$('#pBody').querySelectorAll('[data-pp]')];
   ins.forEach((i,k)=>{
