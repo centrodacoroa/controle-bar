@@ -555,12 +555,12 @@ function renderProdutos(){
    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
     <button class="btn b4" id="dBk">Enviar backup</button>
     <button class="btn b1" id="dRest">Restaurar backup</button>
-    <button class="btn b1" id="dPin" style="grid-column:1/3">Trocar PIN</button></div>
+    ${PIN_ATIVO?'<button class="btn b1" id="dPin" style="grid-column:1/3">Trocar PIN</button>':''}</div>
    <input type="file" id="dArq" accept=".json,application/json" style="display:none">`);
   $('#dBk').onclick=enviarBackup;
   $('#dRest').onclick=()=>$('#dArq').click();
   $('#dArq').onchange=e=>{const f=e.target.files[0];if(f)restaurar(f)};
-  $('#dPin').onclick=()=>{try{localStorage.removeItem(PINK)}catch(e){}pedirPin()};
+  if($('#dPin'))$('#dPin').onclick=()=>{try{localStorage.removeItem(PINK)}catch(e){}pedirPin()};
 }
 
 /* ----- backup: arquivo .json com tudo (produtos + histórico completo) ----- */
@@ -598,7 +598,9 @@ $('#rBk').onclick=enviarBackup;
 /* ----- PIN da área do dono (guardado só como hash; impede mexida casual, não é cofre) ----- */
 const PINK='bar_pin';
 async function hashPin(p){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('bar:'+p));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('')}
+const PIN_ATIVO=false; // desligado a pedido (25/11/2026) até existir login de dono/funcionário; true volta a pedir
 async function pedirPin(){
+  if(!PIN_ATIVO)return true;
   let salvo=null;try{salvo=localStorage.getItem(PINK)}catch(e){}
   if(!salvo){
     const p1=prompt('Crie um PIN de 4 números para a área do dono:');if(p1===null)return false;
