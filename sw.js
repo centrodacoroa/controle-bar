@@ -1,6 +1,6 @@
 // Guarda o app no celular para abrir sem internet.
-// Rede primeiro (pega a versão nova quando tem internet), cache como reserva.
-const CACHE = 'controle-bar-v14';
+// Rede primeiro (pega a versão nova quando tem internet), cache como reserva: sem rede, rede travada (3 s) ou resposta de erro.
+const CACHE = 'controle-bar-v15';
 const ARQS = ['./', 'index.html', 'manifest.webmanifest', 'logo.png', 'icon-192.png', 'icon-512.png',
   // fotos dos produtos (para aparecerem sem internet)
   'fotos/bala-avulsa.jpg', 'fotos/bala-fini.jpg', 'fotos/halls.jpg', 'fotos/trident.jpg',
@@ -32,13 +32,18 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
+  const pagina = e.request.mode === 'navigate';
+  const guardado = () => caches.match(e.request, { ignoreSearch: true }).then(r => r || (pagina ? caches.match('index.html') : undefined));
+  const rede = fetch(e.request).then(r => {
+    if (r.ok && !r.redirected) { // erro (503, página de login do Wi-Fi) nunca entra no lugar do app
+      const copia = r.clone();
+      e.waitUntil(caches.open(CACHE).then(c => c.put(e.request, copia)).catch(() => {}));
+    }
+    return r;
+  });
+  const boa = rede.then(r => { if (!r.ok || r.redirected) throw 0; return r; });
+  const espera = new Promise((ok, erro) => setTimeout(erro, 3000));
   e.respondWith(
-    fetch(e.request)
-      .then(r => {
-        const copia = r.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copia));
-        return r;
-      })
-      .catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('index.html')))
+    Promise.race([boa, espera]).catch(() => guardado().then(r => r || rede))
   );
 });

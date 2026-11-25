@@ -177,7 +177,9 @@ const brl=v=>'R$ '+(v||0).toFixed(2).replace('.',',');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const dstr=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-const hoje=()=>dstr(new Date());
+/* o dia do bar vira às 6h: a madrugada ainda é o movimento da noite */
+const VIRA=6*3600e3, hoje=()=>dstr(new Date(Date.now()-VIRA));
+const diaData=()=>new Date(dia+'T12:00:00');
 const dbr=s=>s.slice(8,10)+'/'+s.slice(5,7);
 const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
 const normal=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
@@ -185,7 +187,8 @@ function toast(t,ms){const e=$('#toast');e.textContent=t;e.classList.add('on');c
 
 /* ===== Dados =====
  contas: todas as contas, de todos os dias (histórico completo).
- conta = {id,nome,dia,itens:[{p,nome,preco,t}],status:'aberta'|'paga'|'devendo',forma:'pix'|'dinheiro',pagoDia,t}
+ conta = {id,nome,dia,itens:[{p,nome,preco,t}],status:'aberta'|'paga'|'devendo',forma:'pix'|'dinheiro',pagoDia,pagoV,extra,t}
+ pagoV = quanto foi pago de verdade; extra = [{v,f,dia,t}] cobranças de item que entrou depois do pagamento (por outro celular).
  Uma conta "devendo" continua aparecendo nos dias seguintes até ser paga.
  produto = {id,e,nome,preco,cat,custo?}  cat = id de uma categoria em "cats" ('' = sem categoria). e vazio = usa o emoji da categoria.
  cats = [{id,e,nome}] na ordem em que aparecem. */
@@ -318,7 +321,11 @@ const estado=()=>({produtos,contas,mov,cats,fotosV,cardV});
 function aplicar(s){contas=s.contas||[];mov=s.mov||[];if(Array.isArray(s.produtos)){fotosV=s.fotosV||0;cardV=s.cardV||0;produtos=s.produtos;cats=Array.isArray(s.cats)?s.cats:undefined}migrar()}
 
 const LS='bar_v2';
-function salvarLocal(){try{localStorage.setItem(LS,JSON.stringify({...estado(),sync}));return true}catch(e){
+const copias=()=>Object.keys(localStorage).filter(x=>x.startsWith('bar_copia_')).sort();
+function salvarLocal(){const txt=JSON.stringify({...estado(),sync});
+  // memória cheia: as cópias antigas saem para o estado de hoje caber
+  for(;;)try{localStorage.setItem(LS,txt);return true}catch(e){let k;try{k=copias()[0]}catch(x){}if(!k)break;localStorage.removeItem(k)}
+  {
   toast('⚠︎ Memória do app cheia: não salvou! Apague fotos tiradas no celular e envie o backup.',6000);return false}}
 function carregarLocal(){try{const raw=localStorage.getItem(LS), s=JSON.parse(raw||'null');if(!s){migrar();return}
   if(s.sync&&s.sync.base)sync=s.sync;
@@ -342,8 +349,9 @@ const imgFoto=p=>`<img class="fi" src="${esc(p.foto)}" alt="" loading="lazy" one
 const vendaveis=()=>porCat().filter(g=>g.itens.length);
 const precoTxt=p=>p.preco>0?brl(p.preco):'sem preço';
 /* item lançado sem preço (sp): quando o produto ganha preço, as contas ainda não pagas são acertadas */
-function completaPrecos(){contas.forEach(c=>{if(c.status!=='paga')c.itens.forEach(i=>{if(!i.sp)return;const p=produtos.find(x=>x.id===i.p);if(p&&p.preco>0){i.preco=p.preco;delete i.sp}})})}
-const semPreco=c=>[...new Set(c.itens.filter(i=>i.sp).map(i=>i.nome))];
+/* o item sp acompanha o preço do produto (inclusive correção de digitação) até a conta ser fechada: aí o preço fica travado */
+function completaPrecos(){contas.forEach(c=>{if(c.status!=='paga'||c.pagoV!==undefined)c.itens.forEach(i=>{if(!i.sp)return;const p=produtos.find(x=>x.id===i.p);if(p&&p.preco>0)i.preco=p.preco})})}
+const semPreco=c=>[...new Set(c.itens.filter(i=>i.sp&&!(i.preco>0)).map(i=>i.nome))];
 const emoDe=p=>p.e||(cats.find(c=>c.id===p.cat)||{}).e||'📦';
 const optsProd=sel=>porCat().filter(g=>g.itens.length).map(g=>`<optgroup label="${esc(g.e+' '+g.nome)}">${g.itens.map(x=>`<option value="${x.id}"${x.id===sel?' selected':''}>${esc(x.nome)}</option>`).join('')}</optgroup>`).join('');
 /* faixa "Mais pedidos": os 6 que mais venderam nos últimos 4 dias com venda; completa com os padrões */
@@ -356,6 +364,11 @@ function maisPedidos(){
 }
 
 const total=c=>c.itens.reduce((s,i)=>s+i.preco,0);
+/* pagamentos de uma conta paga: o caixa soma o que foi pago, não o que entrou na conta depois */
+const pagsDe=c=>c.status!=='paga'?[]:[{v:c.pagoV??total(c),f:c.forma,dia:c.pagoDia,t:c.pagoEm},...(c.extra||[])];
+const falta=c=>{if(c.status!=='paga')return 0;const d=Math.round((total(c)-pagsDe(c).reduce((s,x)=>s+x.v,0))*100)/100;return d>0?d:0};
+const pagsDoDia=()=>contas.flatMap(c=>pagsDe(c).filter(x=>x.dia===dia).map(x=>({...x,c})));
+const acobrar=()=>contas.filter(c=>falta(c)>0), abertas=()=>contas.filter(c=>c.status==='aberta');
 function agrupa(itens){const m={};itens.forEach(i=>{m[i.p]=m[i.p]||{nome:i.nome,q:0,v:0};m[i.p].q++;m[i.p].v+=i.preco});return m}
 const resumo=c=>Object.values(agrupa(c.itens)).map(x=>x.q+' '+x.nome).join(', ')||'nada ainda';
 const doDia=()=>contas.filter(c=>c.dia===dia);
@@ -365,17 +378,17 @@ let verCaixa=false, verCaixaT=null;
 $('#res').onclick=()=>{clearTimeout(verCaixaT);verCaixa=!verCaixa;if(verCaixa)verCaixaT=setTimeout(()=>{verCaixa=false;render()},6000);render()};
 function render(){
   if(hoje()!==dia){dia=hoje()}
-  $('#dia').textContent=new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit'});
-  const ab=doDia().filter(c=>c.status==='aberta');
-  const rec=contas.filter(c=>c.status==='paga'&&c.pagoDia===dia).reduce((s,c)=>s+total(c),0);
+  $('#dia').textContent=diaData().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit'});
+  const ab=abertas();
+  const rec=pagsDoDia().reduce((s,x)=>s+x.v,0);
   // caixa do dia escondido (o cliente vê a tela): toque mostra por 6 s
   $('#res').innerHTML=verCaixa?`Aberto ${brl(ab.reduce((s,c)=>s+total(c),0))} · Recebido ${brl(rec)}`:'<span class="rb">👁 Ver caixa do dia</span>';
   const q=$('#nome').value.trim().toLowerCase(), f=c=>!q||c.nome.toLowerCase().includes(q);
-  const linha=(c,cls)=>`<div class="linha ${cls}" data-id="${c.id}"><span class="n">${esc(c.nome)}<span class="r">${cls==='dev'?'devendo desde '+dbr(c.dia)+' · ':cls==='pago'?(c.pagoEm?'pagou '+hora(c.pagoEm)+' · ':''):'desde '+hora(abertaEm(c))+' · '}${esc(resumo(c))}</span></span></div>`; // sem o total: o cliente pode ver esta tela (o total fica no "Ver total" da conta)
+  const linha=(c,cls)=>`<div class="linha ${cls}" data-id="${c.id}"><span class="n">${esc(c.nome)}<span class="r">${cls==='dev'?'devendo desde '+dbr(c.dia)+' · ':cls==='cobrar'?'entrou item depois de pagar · ':cls==='pago'?(c.pagoEm?'pagou '+hora(c.pagoEm)+' · ':''):'desde '+(c.dia!==dia?dbr(c.dia)+' ':'')+hora(abertaEm(c))+' · '}${esc(resumo(c))}</span></span></div>`; // sem o total: o cliente pode ver esta tela (o total fica no "Ver total" da conta)
   const a=ab.filter(f).sort((x,y)=>y.t-x.t);
-  const pg=doDia().filter(c=>c.status==='paga'&&f(c));
+  const pg=doDia().filter(c=>c.status==='paga'&&!falta(c)&&f(c)), co=acobrar().filter(f);
   const dv=devendo().filter(f);
-  let h=a.map(c=>linha(c,'')).join('');
+  let h=(co.length?`<div class="sep dev" style="cursor:default">Falta cobrar · ${co.length}</div>`+co.map(c=>linha(c,'cobrar')).join('')+(a.length?'<div class="sep">Abertas</div>':''):'')+a.map(c=>linha(c,'')).join('');
   if(dv.length){
     if(q||verDevendo)h+=`<div class="sep dev" id="sepDev">Devendo · ${dv.length} pessoa(s)${q?'':' ▲'}</div>`+dv.map(c=>linha(c,'dev')).join('');
     else h+=`<div class="sep dev" id="sepDev">Devendo · ${dv.length} pessoa(s) ▼ ver</div>`;
@@ -393,7 +406,7 @@ function render(){
 /* ----- criar conta, com checagem de nome repetido ----- */
 function criar(){
   const n=cap($('#nome').value.trim());if(!n)return;
-  const iguais=doDia().filter(c=>c.status==='aberta'&&c.nome.toLowerCase()===n.toLowerCase());
+  const iguais=abertas().filter(c=>c.nome.toLowerCase()===n.toLowerCase());
   const dev=devendo().filter(c=>c.nome.toLowerCase()===n.toLowerCase());
   if(iguais.length||dev.length){perguntarDup(n,iguais,dev);return}
   novaConta(n);
@@ -401,7 +414,7 @@ function criar(){
 function perguntarDup(n,iguais,dev){
   const d=$('#dup');d.style.display='block';
   const ex=iguais[0];
-  d.innerHTML=`<p>${ex?`Já tem <b>${esc(n)}</b> aberto hoje.`:''}${dev.length?` <b>${esc(n)}</b> tem conta em aberto de outro dia.`:''} É a mesma pessoa?</p>
+  d.innerHTML=`<p>${ex?`Já tem <b>${esc(n)}</b> com conta aberta.`:''}${dev.length?` <b>${esc(n)}</b> tem conta em aberto de outro dia.`:''} É a mesma pessoa?</p>
    <div class="bt">${ex?`<button class="btn b3" id="dMesmo">Sim, abrir</button>`:`<button class="btn b3" id="dMesmo">Sim, nova conta</button>`}<button class="btn b1" id="dOutro">Não, é outro</button></div>
    <input id="dApel" placeholder="Apelido: ex. ${esc(n)} goleiro" style="display:none" autocapitalize="words">`;
   $('#dMesmo').onclick=()=>{d.style.display='none';ex?abrir(ex.id):novaConta(n)};
@@ -409,7 +422,7 @@ function perguntarDup(n,iguais,dev){
     $('#dOutro').onclick=()=>{const v=cap(i.value.trim());if(!v||v.toLowerCase()===n.toLowerCase()){toast('Escreva um apelido');return}d.style.display='none';novaConta(v)};
     i.onkeydown=e=>{if(e.key==='Enter')$('#dOutro').click()}};
 }
-function novaConta(n){const agora=Date.now(), c={id:uid(),nome:n,dia,itens:[],status:'aberta',t:agora,abertaEm:agora,hist:[{t:agora,k:'abriu'}]};contas.push(c);salvar();abrir(c.id)}
+function novaConta(n){const agora=Date.now(), c={id:uid(),nome:n,dia:hoje(),itens:[],status:'aberta',t:agora,abertaEm:agora,hist:[{t:agora,k:'abriu'}]};contas.push(c);salvar();abrir(c.id)}
 
 /* ----- conta aberta ----- */
 /* ----- linha do tempo da conta -----
@@ -425,7 +438,7 @@ function evento(c,e){if(!c.hist)c.hist=histDe(c);c.hist.push(e)}
 function htmlHist(c){
   const d0=c.dia, fmt=t=>{const d=dstr(new Date(t));return (d!==d0?dbr(d)+' ':'')+hora(t)};
   const txt=e=>e.k==='abriu'?(e.aprox?'abriu (aprox.)':'abriu a conta'):e.k==='+'?'+1 '+esc(e.n):e.k==='-'?'<b class="hx">tirou 1 '+esc(e.n)+'</b>':
-    e.k==='pagou'?'<b>pagou no '+(e.f==='pix'?'Pix':'dinheiro')+'</b>':e.k==='devendo'?'<b class="hx">ficou devendo</b>':'reabriu a conta';
+    e.k==='pagou'?'<b>pagou '+(e.v?brl(+e.v)+' ':'')+'no '+(e.f==='pix'?'Pix':'dinheiro')+'</b>':e.k==='devendo'?'<b class="hx">ficou devendo</b>':'reabriu a conta';
   return histDe(c).map(e=>`<div class="he"><span>${fmt(e.t)}</span>${txt(e)}</div>`).join('');
 }
 let verHist=false;
@@ -444,8 +457,9 @@ function renderConta(){
   const outras=devendo().filter(x=>x.id!==c.id&&x.nome.toLowerCase()===c.nome.toLowerCase());
   if(outras.length&&c.status==='aberta')h+=`<div class="aviso">⚠︎ ${esc(c.nome)} está devendo ${ver?brl(outras.reduce((s,x)=>s+total(x),0))+' ':''}de ${outras.map(x=>dbr(x.dia)).join(', ')}. <u data-ab="${outras[0].id}">Ver</u></div>`;
   if(c.status==='devendo')h+=`<div class="aviso">Ficou devendo desde ${dbr(c.dia)}. Quando pagar, toque em "Fechar conta".</div>`;
-  ['pix','dinheiro'].forEach(k=>{const b=$('#fechar [data-f='+k+']');if(b)b.textContent=(k==='pix'?'Pix ':'Dinheiro ')+brl(total(c))});
-  if(c.status==='paga'&&c.pagoEm&&c.itens.some(i=>i.t>c.pagoEm))h+=`<div class="aviso">⚠︎ Entrou item de outro celular depois do pagamento. Confira em Horários.</div>`;
+  ['pix','dinheiro'].forEach(k=>{const b=$('#fechar [data-f='+k+']');if(b)b.textContent=(k==='pix'?'Pix ':'Dinheiro ')+brl(falta(c)||total(c))});
+  if(falta(c))h+=`<div class="aviso">⚠︎ Entrou item de outro celular depois do pagamento. Falta cobrar ${brl(falta(c))}. Confira em Horários.</div>`;
+  else if(c.status==='paga'&&c.pagoV!==undefined&&semPreco(c).length)h+=`<div class="aviso">⚠︎ Entrou item sem preço depois do pagamento: ${semPreco(c).map(esc).join(', ')}.</div>`;
   if(c.status==='paga')h+=`<div class="aviso ok">Paga em ${dbr(c.pagoDia)} no ${c.forma==='pix'?'Pix':'dinheiro'}.</div>`;
   if(ver&&semPreco(c).length)h+=`<div class="aviso">⚠︎ Falta o preço de: ${semPreco(c).map(esc).join(', ')}. O total ainda não inclui. <u id="cFalta">Preencher</u></div>`;
   h+=`<div class="lista"><b>Pegou:</b>${Object.keys(g).length?Object.entries(g).map(([pid,x])=>`<div class="pg${pid===ultimo?' novo1':''}"><span><b class="qq">${x.q}×</b> ${esc(x.nome)}</span>${ver?`<b>${x.v>0?brl(x.v):'sem preço'}</b>`:''}${trav?'':`<button class="menos" data-m="${pid}">− tirar 1</button>`}</div>`).join(''):' <span style="color:#888">nada ainda</span>'}<button class="hb" id="bHist">🕒 Horários ${verHist?'▲':'▼'}</button>${verHist?`<div class="hist">${htmlHist(c)}</div>`:''}</div>`;
@@ -478,7 +492,7 @@ function renderConta(){
   $('#sBody').querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{
     const k=c.itens.map(i=>i.p).lastIndexOf(b.dataset.m);if(k<0)return;evento(c,{t:Date.now(),k:'-',n:c.itens[k].nome});const it=c.itens.splice(k,1)[0];ultimo=null;salvar();renderConta();toast('Tirou 1 '+it.nome);
   });
-  $('#bFechar').textContent=c.status==='paga'?'Reabrir':'Fechar conta';
+  $('#bFechar').textContent=falta(c)?'Cobrar '+brl(falta(c)):c.status==='paga'?'Reabrir':'Fechar conta';
   $('#bFechar').style.display=(c.status==='aberta'&&!c.itens.length)?'none':'';
 }
 function lancar(pid,deCat){
@@ -496,16 +510,21 @@ $('#bVolta').onclick=()=>{
   $('#sheet').classList.remove('on');aberta=null;$('#nome').value='';render()};
 $('#bFechar').onclick=()=>{
   const c=aberta,f=$('#fechar');
-  if(c.status==='paga'){evento(c,{t:Date.now(),k:'reabriu'});c.status='aberta';delete c.forma;delete c.pagoDia;delete c.pagoEm;salvar();toast('Reaberta');renderConta();return}
+  const reabrir=()=>{evento(c,{t:Date.now(),k:'reabriu'});c.status='aberta';['forma','pagoDia','pagoEm','pagoV','extra'].forEach(k=>delete c[k]);f.classList.remove('on');salvar();toast('Reaberta');renderConta()};
+  if(c.status==='paga'&&!falta(c)&&!f.classList.contains('on')){reabrir();return}
   if(f.classList.contains('on')){f.classList.remove('on');renderConta();return}
-  f.innerHTML=`<button class="btn b4" data-f="pix">Pix ${brl(total(c))}</button><button class="btn b3" data-f="dinheiro">Dinheiro ${brl(total(c))}</button>${c.status==='aberta'?'<button class="btn b2 w" data-f="dev">Ficou devendo</button>':''}`;
+  f.innerHTML=`<button class="btn b4" data-f="pix">Pix ${brl(falta(c)||total(c))}</button><button class="btn b3" data-f="dinheiro">Dinheiro ${brl(falta(c)||total(c))}</button>${c.status==='aberta'?'<button class="btn b2 w" data-f="dev">Ficou devendo</button>':c.status==='paga'?'<button class="btn b1 w" data-f="reabrir">Reabrir a conta</button>':''}`;
   f.classList.add('on');renderConta(); // fechando: o total aparece
   f.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{
     const k=b.dataset.f;
+    if(k==='reabrir'){reabrir();return}
+    if(c.status==='paga'&&!falta(c)){f.classList.remove('on');renderConta();toast('Já foi paga em outro celular',2500);return}
     if(k!=='dev'&&semPreco(c).length&&!confirm('Falta o preço de: '+semPreco(c).join(', ')+'.\nFechar mesmo assim? Esses itens ficam de graça.'))return;
     const agora=Date.now();
-    if(k==='dev'){c.status='devendo';c.devendoEm=agora;evento(c,{t:agora,k:'devendo'});toast(c.nome+' ficou devendo')}
-    else{c.status='paga';c.forma=k;c.pagoDia=dia;c.pagoEm=agora;evento(c,{t:agora,k:'pagou',f:k});toast(c.nome+' pagou no '+(k==='pix'?'Pix':'dinheiro'))}
+    const d=falta(c);c.itens.forEach(i=>{if(i.sp&&(i.preco>0||k!=='dev'))delete i.sp}); // fechou: preço travado
+    if(d){c.extra=[...(c.extra||[]),{v:d,f:k,dia:hoje(),t:agora}];evento(c,{t:agora,k:'pagou',f:k,v:d});toast('Diferença cobrada')}
+    else if(k==='dev'){c.status='devendo';c.devendoEm=agora;evento(c,{t:agora,k:'devendo'});toast(c.nome+' ficou devendo')}
+    else{c.status='paga';c.forma=k;c.pagoDia=hoje();c.pagoEm=agora;c.pagoV=total(c);evento(c,{t:agora,k:'pagou',f:k});toast(c.nome+' pagou no '+(k==='pix'?'Pix':'dinheiro'))}
     salvar();f.classList.remove('on');$('#bVolta').onclick();
   });
 };
@@ -515,31 +534,32 @@ $('#novo').onclick=criar;
 
 /* ----- resumo / fechar o dia ----- */
 function textoResumo(){
-  const pagosHoje=contas.filter(c=>c.status==='paga'&&c.pagoDia===dia);
-  const pix=pagosHoje.filter(c=>c.forma==='pix').reduce((s,c)=>s+total(c),0);
-  const din=pagosHoje.filter(c=>c.forma==='dinheiro').reduce((s,c)=>s+total(c),0);
-  const fiadoRec=pagosHoje.filter(c=>c.dia!==dia).reduce((s,c)=>s+total(c),0);
+  const pagosHoje=pagsDoDia();
+  const pix=pagosHoje.filter(x=>x.f==='pix').reduce((s,x)=>s+x.v,0);
+  const din=pagosHoje.filter(x=>x.f==='dinheiro').reduce((s,x)=>s+x.v,0);
+  const fiadoRec=pagosHoje.filter(x=>x.c.dia!==dia).reduce((s,x)=>s+x.v,0);
   const hojeC=doDia(), vend=hojeC.reduce((s,c)=>s+total(c),0);
-  const abertas=hojeC.filter(c=>c.status==='aberta');
   const novoDev=hojeC.filter(c=>c.status==='devendo');
   const dvTot=devendo().reduce((s,c)=>s+total(c),0);
   const g={};hojeC.forEach(c=>c.itens.forEach(i=>{g[i.nome]=g[i.nome]||{q:0,v:0};g[i.nome].q++;g[i.nome].v+=i.preco}));
   const prods=Object.entries(g).sort((a,b)=>b[1].q-a[1].q);
-  return {pix,din,fiadoRec,vend,abertas,novoDev,dvTot,prods,n:hojeC.length};
+  return {pix,din,fiadoRec,vend,abertas:abertas(),novoDev,dvTot,prods,n:hojeC.length};
 }
 function abrirResumo(){
+  dia=hoje();
   const r=textoResumo();
   const l=(a,b,cls='')=>`<div class="l ${cls}"><span>${a}</span><b>${b}</b></div>`;
   let h='';
-  if(r.abertas.length)h+=`<div class="aviso">⚠︎ Ainda tem ${r.abertas.length} conta(s) aberta(s): ${r.abertas.map(c=>esc(c.nome)).join(', ')}. Feche ou marque "ficou devendo".</div>`;
+  if(r.abertas.length)h+=`<div class="aviso">⚠︎ Ainda tem ${r.abertas.length} conta(s) aberta(s): ${r.abertas.map(c=>esc(c.nome)+(c.dia!==dia?' ('+dbr(c.dia)+')':'')).join(', ')}. Feche ou marque "ficou devendo".</div>`;
+  if(acobrar().length)h+=`<div class="aviso">⚠︎ Falta cobrar (item entrou depois do pagamento): ${acobrar().map(c=>esc(c.nome)+' '+brl(falta(c))).join(', ')}.</div>`;
   h+=`<h3>Caixa</h3>${l('Pix',brl(r.pix))}${l('Dinheiro',brl(r.din))}${l('Total recebido',brl(r.pix+r.din),'big')}`;
-  if(r.fiadoRec)h+=`<div style="font-size:14px;color:#666">inclui ${brl(r.fiadoRec)} de dívidas antigas pagas hoje</div>`;
+  if(r.fiadoRec)h+=`<div style="font-size:14px;color:#666">inclui ${brl(r.fiadoRec)} de contas de outros dias pagas hoje</div>`;
   h+=`<h3>Vendas de hoje</h3>${l('Clientes',r.n)}${l('Vendido',brl(r.vend))}${l('Ficou devendo hoje',brl(r.novoDev.reduce((s,c)=>s+total(c),0)))}${l('Total devendo (todos os dias)',brl(r.dvTot))}`;
-  const pgs=contas.filter(c=>c.status==='paga'&&c.pagoDia===dia).sort((a,b)=>(a.pagoEm||0)-(b.pagoEm||0));
-  if(pgs.length)h+=`<h3>Pagamentos</h3>${pgs.map(c=>l((c.pagoEm?hora(c.pagoEm)+' · ':'')+esc(c.nome)+' · '+(c.forma==='pix'?'Pix':'dinheiro')+(c.dia!==dia?' (dívida de '+dbr(c.dia)+')':''),brl(total(c)))).join('')}`;
+  const pgs=pagsDoDia().sort((a,b)=>(a.t||0)-(b.t||0));
+  if(pgs.length)h+=`<h3>Pagamentos</h3>${pgs.map(x=>l((x.t?hora(x.t)+' · ':'')+esc(x.c.nome)+' · '+(x.f==='pix'?'Pix':'dinheiro')+(x.c.dia!==dia?' (conta de '+dbr(x.c.dia)+')':''),brl(x.v))).join('')}`;
   h+=`<h3>Por produto</h3>${r.prods.map(([n,x])=>l(x.q+'× '+esc(n),brl(x.v))).join('')||'<div style="color:#888">nada vendido</div>'}`;
   $('#rBody').innerHTML=h;
-  const t=`*Bar - resumo ${new Date().toLocaleDateString('pt-BR')}*\nPix: ${brl(r.pix)}\nDinheiro: ${brl(r.din)}\n*Recebido: ${brl(r.pix+r.din)}*\nVendido hoje: ${brl(r.vend)} (${r.n} clientes)\nFicou devendo hoje: ${brl(r.novoDev.reduce((s,c)=>s+total(c),0))}${r.novoDev.length?' ('+r.novoDev.map(c=>c.nome).join(', ')+')':''}\nTotal devendo: ${brl(r.dvTot)}\n\n*Produtos*\n${r.prods.map(([n,x])=>x.q+'x '+n+' = '+brl(x.v)).join('\n')}`;
+  const t=`*Bar - resumo ${diaData().toLocaleDateString('pt-BR')}*\nPix: ${brl(r.pix)}\nDinheiro: ${brl(r.din)}\n*Recebido: ${brl(r.pix+r.din)}*\nVendido hoje: ${brl(r.vend)} (${r.n} clientes)\nFicou devendo hoje: ${brl(r.novoDev.reduce((s,c)=>s+total(c),0))}${r.novoDev.length?' ('+r.novoDev.map(c=>c.nome).join(', ')+')':''}\nTotal devendo: ${brl(r.dvTot)}\n\n*Produtos*\n${r.prods.map(([n,x])=>x.q+'x '+n+' = '+brl(x.v)).join('\n')}`;
   $('#rZap').href='https://wa.me/?text='+encodeURIComponent(t);
   $('#resumo').classList.add('on');
 }
@@ -617,12 +637,12 @@ function restaurar(f){
   }catch(e){toast('Arquivo de backup inválido')}};
   r.readAsText(f);
 }
-/* cópia automática no próprio celular: guarda o estado de antes de cada dia novo (últimos 7) */
+/* cópia automática no próprio celular: guarda o estado de antes de cada dia novo (últimos 2) */
 function salvarCopiaSeguranca(){try{
-  // cópia sem as fotos tiradas no celular (são o que mais ocupa; 7 cópias com fotos lotariam a memória)
+  // cópia sem as fotos tiradas no celular (são o que mais ocupa; cópias com fotos lotariam a memória)
   const s=estado();s.produtos=s.produtos.map(p=>String(p.foto||'').startsWith('data:')?{...p,foto:''}:p);
   const k='bar_copia_'+hoje();localStorage.setItem(k,JSON.stringify(s));
-  Object.keys(localStorage).filter(x=>x.startsWith('bar_copia_')).sort().slice(0,-7).forEach(x=>localStorage.removeItem(x));
+  copias().slice(0,-2).forEach(x=>localStorage.removeItem(x));
 }catch(e){}}
 $('#rBk').onclick=enviarBackup;
 /* ----- PIN da área do dono (guardado só como hash; impede mexida casual, não é cofre) ----- */
@@ -758,14 +778,14 @@ function renderPrecos(){
    (gs.map(g=>`<div class="pc"><h4><span>${esc(g.e+' '+g.nome)}</span>${pFil==='falta'&&g.itens.length>1?`<button data-igual="${esc(g.id)}">mesmo preço p/ todos</button>`:''}</h4>${g.itens.map(p=>`<div class="pl${p.preco>0?'':' f'}"><span>${esc(p.nome)}${p.preco>0&&p.est?'<small>conferir</small>':''}</span>${p.preco>0&&p.est?`<button class="okk" data-ok="${p.id}" aria-label="Preço certo">✓</button>`:''}<em class="sv"></em><input data-pp="${p.id}" inputmode="decimal" enterkeyhint="next" placeholder="R$" aria-label="Preço de ${esc(p.nome)}" value="${fmt(p)}"></div>`).join('')}</div>`).join('')||'<p class="nota">✓ Nada pendente aqui.</p>');
   const ins=[...$('#pBody').querySelectorAll('[data-pp]')];
   ins.forEach((i,k)=>{
-    /* grava sozinho enquanto digita (0,6 s parado), ao sair do campo e ao fechar o app */
+    /* grava sozinho enquanto digita (1,5 s parado), ao sair do campo e ao fechar o app */
     let t=null;const linha=i.closest('.pl'), p=produtos.find(x=>x.id===i.dataset.pp);if(!p)return;
     const grava=()=>{clearTimeout(t);t=null;const v=lerPreco(i.value);if(!(v>0))return false;
       if(p.preco===v&&!(p.est&&i.dataset.mexeu))return true;
       p.preco=v;delete p.est;const certo=salvar();filtros();linha.classList.remove('f');linha.querySelectorAll('small,.okk').forEach(x=>x.remove());
       if(certo)linha.querySelector('.sv').textContent='✓ salvo';return true};
     i.onfocus=()=>i.select();
-    i.oninput=()=>{i.dataset.mexeu=1;linha.querySelector('.sv').textContent='';clearTimeout(t);t=setTimeout(grava,600)};
+    i.oninput=()=>{i.dataset.mexeu=1;linha.querySelector('.sv').textContent='';clearTimeout(t);t=setTimeout(grava,1500)};
     i.onblur=()=>{if(!i.dataset.mexeu)return;if(!grava())toast(i.value.trim()?'Preço inválido: não mudou':'Vazio: não mudou',2000);i.value=fmt(p);delete i.dataset.mexeu};
     i._grava=()=>{if(t)grava()};
     i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();ins[k+1]?ins[k+1].focus():i.blur()}};
@@ -846,7 +866,7 @@ let rodando=false, denovo=false, tSync=null, falhas=0, ultimoOk=0, erroSync='';
 const canon=v=>Array.isArray(v)?'['+v.map(canon).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).filter(k=>v[k]!==undefined).sort().map(k=>JSON.stringify(k)+':'+canon(v[k])).join(',')+'}':JSON.stringify(v);
 function imp(v){const s=canon(v);let a=0xdeadbeef,b=0x41c6ce57;for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);a=Math.imul(a^c,2654435761);b=Math.imul(b^c,1597334677)}
   a=Math.imul(a^(a>>>16),2246822507)^Math.imul(b^(b>>>13),3266489909);b=Math.imul(b^(b>>>16),2246822507)^Math.imul(a^(a>>>13),3266489909);return (4294967296*(2097151&b)+(a>>>0)).toString(36)}
-const CAB=['nome','dia','status','forma','pagoDia','abertaEm','pagoEm','devendoEm'];
+const CAB=['nome','dia','status','forma','pagoDia','abertaEm','pagoEm','devendoEm','pagoV','extra'];
 const so=(o,ks)=>{const r={};ks.forEach(k=>{if(o[k]!==undefined)r[k]=o[k]});return r};
 function mapa(){
   const m={}, sem=(o,x)=>{const r={...o};delete r[x];return r};
@@ -872,7 +892,8 @@ function aplicaDoc(k,v,d){
   else if(t==='k'){if(d)cats=cats.filter(x=>x.id!==a);else{const c=poe(cats,a,v);c.nome=String(c.nome||'')}}
   else if(t==='m'){if(d)mov=mov.filter(x=>x.id!==a);else poe(mov,a,v)}
   else if(t==='c'){if(d){contas=contas.filter(x=>x.id!==a);return}
-    let c=contas.find(x=>x.id===a);if(!c){c={id:a,itens:[]};contas.push(c)}CAB.forEach(f=>{if(v[f]===undefined)delete c[f];else c[f]=v[f]});c.nome=String(c.nome||'');c.dia=String(c.dia||hoje())}
+    let c=contas.find(x=>x.id===a);if(!c){c={id:a,itens:[]};contas.push(c)}CAB.forEach(f=>{if(v[f]===undefined)delete c[f];else c[f]=v[f]});c.nome=String(c.nome||'');c.dia=String(c.dia||hoje());
+    if(c.pagoV!==undefined)c.pagoV=+c.pagoV||0;if(c.extra!==undefined)c.extra=Array.isArray(c.extra)?c.extra.filter(x=>x&&typeof x==='object').map(x=>({...x,v:+x.v||0})):[]}
   else if(t==='i'||t==='h'){const c=contas.find(x=>x.id===a);if(!c||!ID.test(b||''))return;
     if(t==='h'&&!c.hist){if(d)return;c.hist=[]}
     const l=t==='i'?c.itens:c.hist, ix=l.findIndex(x=>x.u===b);
@@ -888,16 +909,29 @@ async function rpc(desde,ops){
   try{const r=await fetch(SB_URL+'/rest/v1/rpc/bar_sync',{method:'POST',signal:ac.signal,headers:{apikey:SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({p_chave:chave(),p_desde:desde,p_ops:ops})});
     if(!r.ok)throw Error('http '+r.status);const j=await r.json();if(j.erro)throw Error(j.erro);return j}finally{clearTimeout(t)}
 }
+/* tent = envios sem resposta (internet caiu no meio): o banco pode ter recebido. Antes de reenviar, lê o que ele tem:
+ assim um item que outro celular já tirou (ou que foi tirado aqui) não volta sozinho para a conta */
+async function confereEnvio(){
+  let docs=[], desde=sync.desde, j;
+  do{j=await rpc(desde,[]);docs=docs.concat(j.docs);if(j.docs.length)desde=j.docs[j.docs.length-1].r}while(j.mais);
+  const m=mapa(), ult=new Map();let mudou=false;docs.forEach(x=>ult.set(x.k,x));
+  ult.forEach((x,k)=>{const h=sync.tent[k];if(!h)return;
+    if(x.d){if(k[0]==='i'&&m[k]&&sync.base[k]===undefined){aplicaDoc(k,null,true);mudou=true}} // já tinha chegado e outro celular tirou: aceita
+    else if(imp(x.v)===h||(k[0]==='i'&&!m[k]))sync.base[k]=imp(x.v)}); // chegou; se foi tirado aqui, manda apagar
+  sync.tent={};salvarLocal();if(mudou)repinta(); // o resto chega pelo caminho normal, depois de enviar o que está pendente
+}
 async function sincroniza(){
   if(!chave()||!sync.ligado)return;
   if(rodando){denovo=true;return}
   rodando=true;denovo=false;
   try{
+    if(Object.keys(sync.tent||{}).length)await confereEnvio();
     let docs=[], desde=sync.desde, resta=true;
     while(resta){
       let lote=[], tam=0;for(const o of pendentes(mapa())){const n=JSON.stringify(o).length;if(lote.length>=200||(lote.length&&tam+n>400000))break;lote.push(o);tam+=n}
+      if(lote.length){sync.tent=sync.tent||{};lote.forEach(o=>{if(!o.d)sync.tent[o.k]=o.h});salvarLocal()}
       const j=await rpc(desde,lote.map(({k,v,d})=>d?{k,d}:{k,v}));
-      lote.forEach(o=>{if(o.d)delete sync.base[o.k];else sync.base[o.k]=o.h});
+      lote.forEach(o=>{delete sync.tent[o.k];if(o.d)delete sync.base[o.k];else sync.base[o.k]=o.h});
       docs=docs.concat(j.docs);if(j.docs.length)desde=j.docs[j.docs.length-1].r;
       resta=j.mais||lote.length>=200||tam>300000;
     }
@@ -915,7 +949,7 @@ function recebe(docs){
   if(!l.length)return false;
   const d=mapa();l.forEach(x=>{if(d[x.k])sync.base[x.k]=imp(d[x.k]);else delete sync.base[x.k]});
   // apagar uma conta leva junto os itens dela que este celular ainda tinha
-  Object.keys(sync.base).forEach(k=>{if((k[0]==='i'||k[0]==='h')&&!d[k]&&!m[k])delete sync.base[k]});
+  Object.keys(sync.base).forEach(k=>{if((k[0]==='i'||k[0]==='h')&&!d[k]&&!m[k]){delete sync.base[k];if(sync.tent)delete sync.tent[k]}});
   acertaCats();completaPrecos();return true;
 }
 function repinta(){
