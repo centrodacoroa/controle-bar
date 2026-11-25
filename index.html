@@ -126,6 +126,7 @@ a.btn{display:block;text-align:center;text-decoration:none}
 .pc h4 button,.pl .okk{border:0;border-radius:8px;background:#e3f1e8;color:#1f5c3a;font-size:13px;font-weight:700;padding:8px 10px}
 .pl{display:flex;align-items:center;gap:8px;border-bottom:1px solid #eee;padding:6px 0;font-size:16px}.pl span{flex:1;min-width:0}.pl small{display:block;color:#b26b00;font-size:12px}
 .pl input{width:96px;font-size:20px;padding:10px 8px;border:2px solid #cfd8d2;border-radius:10px;text-align:right}.pl.f input{border-color:#e8b84a;background:#fffaf0}
+.pl .sv{font-style:normal;font-size:13px;font-weight:700;color:#1f5c3a;white-space:nowrap}
 .dif{border-radius:10px;padding:10px;margin:8px 0;font-size:15px;background:#e3f1e8;color:#1f5c3a}.dif.ruim{background:#fbe3e1;color:#7a1712}
 </style>
 </head>
@@ -297,17 +298,17 @@ const estado=()=>({produtos,contas,mov,cats,fotosV,cardV});
 function aplicar(s){contas=s.contas||[];mov=s.mov||[];if(Array.isArray(s.produtos)){fotosV=s.fotosV||0;cardV=s.cardV||0;produtos=s.produtos;cats=Array.isArray(s.cats)?s.cats:undefined}migrar()}
 
 const LS='bar_v2';
-function salvarLocal(){try{localStorage.setItem(LS,JSON.stringify(estado()))}catch(e){
-  toast('⚠︎ Memória do app cheia: não salvou! Apague fotos tiradas no celular e envie o backup.',6000)}}
+function salvarLocal(){try{localStorage.setItem(LS,JSON.stringify(estado()));return true}catch(e){
+  toast('⚠︎ Memória do app cheia: não salvou! Apague fotos tiradas no celular e envie o backup.',6000);return false}}
 function carregarLocal(){try{const raw=localStorage.getItem(LS), s=JSON.parse(raw||'null');if(!s){migrar();return}
   if((s.cardV||0)<CARD_V)try{if(!localStorage.getItem('bar_antes_cardapio2'))localStorage.setItem('bar_antes_cardapio2',raw)}catch(e){} // cópia de antes; falta de espaço não pode impedir de abrir
   const antigo=!Array.isArray(s.cats);
   if(antigo)try{if(!localStorage.getItem('bar_antes_categorias'))localStorage.setItem('bar_antes_categorias',raw)}catch(e){} // cópia intacta de antes da migração
   aplicar(s);if(antigo||(s.fotosV||0)<FOTOS_V||(s.cardV||0)<CARD_V)salvarLocal()}catch(e){}}
 let tmr=null;
-function salvar(){salvarLocal();if(!db)return;clearTimeout(tmr);tmr=setTimeout(()=>{
+function salvar(){const okLocal=salvarLocal();if(!db)return okLocal;clearTimeout(tmr);tmr=setTimeout(()=>{
   db.collection('bar').doc('estado').set({json:JSON.stringify(estado()),t:Date.now()}).catch(()=>{});
-},500)}
+},500);return okLocal}
 carregarLocal();
 /* categorias na ordem, cada uma com seus produtos; produto sem categoria vai num grupo '' no fim */
 function porCat(){
@@ -718,17 +719,23 @@ function abrirPrecos(novo){pFil=faltam().length?'falta':conferir().length?'conf'
 function filtros(){$('#pFil').innerHTML=[['falta','Falta ('+faltam().length+')'],['conf','Conferir ('+conferir().length+')'],['todos','Todos ('+produtos.length+')']].map(([k,t])=>`<button data-fl="${k}" class="${k===pFil?'on':''}">${t}</button>`).join('');
   $('#pFil').querySelectorAll('button').forEach(b=>b.onclick=()=>{pFil=b.dataset.fl;renderPrecos();$('#pBody').scrollTop=0});botaoPrecos()}
 function renderPrecos(){
-  filtros();
+  gravaPendentes();filtros();
   const ok=p=>pFil==='todos'||(pFil==='falta'?!(p.preco>0):p.preco>0&&p.est), fmt=p=>p.preco>0?p.preco.toFixed(2).replace('.',','):'';
   const gs=porCat().map(g=>({...g,itens:g.itens.filter(ok)})).filter(g=>g.itens.length);
-  $('#pBody').innerHTML='<p class="nota">'+(pFil==='falta'?'Escreva o preço e toque em próximo no teclado. Salva sozinho. Sem preço, o produto não aparece para vender.':pFil==='conf'?'Estes preços são estimativa. Corrija, ou toque em ✓ se estiver certo.':'Mudar preço não altera o que já foi lançado.')+'</p>'+
-   (gs.map(g=>`<div class="pc"><h4><span>${esc(g.e+' '+g.nome)}</span>${pFil==='falta'&&g.itens.length>1?`<button data-igual="${esc(g.id)}">mesmo preço p/ todos</button>`:''}</h4>${g.itens.map(p=>`<div class="pl${p.preco>0?'':' f'}"><span>${esc(p.nome)}${p.preco>0&&p.est?'<small>conferir</small>':''}</span>${p.preco>0&&p.est?`<button class="okk" data-ok="${p.id}" aria-label="Preço certo">✓</button>`:''}<input data-pp="${p.id}" inputmode="decimal" enterkeyhint="next" placeholder="R$" aria-label="Preço de ${esc(p.nome)}" value="${fmt(p)}"></div>`).join('')}</div>`).join('')||'<p class="nota">✓ Nada pendente aqui.</p>');
+  $('#pBody').innerHTML='<p class="nota">'+(pFil==='falta'?'Escreva o preço: cada um é gravado na hora (✓ salvo). Sem preço, o produto não aparece para vender.':pFil==='conf'?'Estes preços são estimativa. Corrija, ou toque em ✓ se estiver certo.':'Mudar preço não altera o que já foi lançado.')+'</p>'+
+   (gs.map(g=>`<div class="pc"><h4><span>${esc(g.e+' '+g.nome)}</span>${pFil==='falta'&&g.itens.length>1?`<button data-igual="${esc(g.id)}">mesmo preço p/ todos</button>`:''}</h4>${g.itens.map(p=>`<div class="pl${p.preco>0?'':' f'}"><span>${esc(p.nome)}${p.preco>0&&p.est?'<small>conferir</small>':''}</span>${p.preco>0&&p.est?`<button class="okk" data-ok="${p.id}" aria-label="Preço certo">✓</button>`:''}<em class="sv"></em><input data-pp="${p.id}" inputmode="decimal" enterkeyhint="next" placeholder="R$" aria-label="Preço de ${esc(p.nome)}" value="${fmt(p)}"></div>`).join('')}</div>`).join('')||'<p class="nota">✓ Nada pendente aqui.</p>');
   const ins=[...$('#pBody').querySelectorAll('[data-pp]')];
   ins.forEach((i,k)=>{
-    let ini='';i.onfocus=()=>{ini=i.value;i.select()};
-    i.onchange=()=>{if(i.value===ini)return;const p=produtos.find(x=>x.id===i.dataset.pp), v=lerPreco(i.value);if(!p)return;
-      if(!(v>0)){toast('Preço inválido: não mudou',2000);i.value=fmt(p);return}
-      p.preco=v;delete p.est;salvar();filtros();i.value=fmt(p);ini=i.value;const l=i.closest('.pl');l.classList.remove('f');l.querySelectorAll('small,.okk').forEach(x=>x.remove())};
+    /* grava sozinho enquanto digita (0,6 s parado), ao sair do campo e ao fechar o app */
+    let t=null;const linha=i.closest('.pl'), p=produtos.find(x=>x.id===i.dataset.pp);if(!p)return;
+    const grava=()=>{clearTimeout(t);t=null;const v=lerPreco(i.value);if(!(v>0))return false;
+      if(p.preco===v&&!(p.est&&i.dataset.mexeu))return true;
+      p.preco=v;delete p.est;const certo=salvar();filtros();linha.classList.remove('f');linha.querySelectorAll('small,.okk').forEach(x=>x.remove());
+      if(certo)linha.querySelector('.sv').textContent='✓ salvo';return true};
+    i.onfocus=()=>i.select();
+    i.oninput=()=>{i.dataset.mexeu=1;linha.querySelector('.sv').textContent='';clearTimeout(t);t=setTimeout(grava,600)};
+    i.onblur=()=>{if(!i.dataset.mexeu)return;if(!grava())toast(i.value.trim()?'Preço inválido: não mudou':'Vazio: não mudou',2000);i.value=fmt(p);delete i.dataset.mexeu};
+    i._grava=()=>{if(t)grava()};
     i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();ins[k+1]?ins[k+1].focus():i.blur()}};
   });
   $('#pBody').querySelectorAll('[data-ok]').forEach(b=>b.onclick=()=>{const p=produtos.find(x=>x.id===b.dataset.ok);delete p.est;salvar();renderPrecos()});
@@ -764,6 +771,7 @@ function linkPrecos(){
   return location.href.split('#')[0]+'#precos='+btoa(unescape(encodeURIComponent(JSON.stringify(d)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 }
 $('#pEnviar').onclick=async()=>{
+  gravaPendentes();
   const t='Preços do bar. Abra no outro celular para atualizar:\n'+linkPrecos();
   if(navigator.share){try{await navigator.share({text:t});return}catch(e){if(e&&e.name==='AbortError')return}}
   window.open('https://wa.me/?text='+encodeURIComponent(t),'_blank','noopener');
@@ -784,6 +792,8 @@ function receberPrecos(){
   novos.forEach(x=>{const p={id:x[0],e:'',nome:x[3].trim(),preco:x[1],cat:cats.some(c=>c.id===x[4])?x[4]:'',foto:''};if(x[2])p.est=true;produtos.push(p)});
   salvar();render();botaoPrecos();if(aberta)renderConta();if($('#precos').classList.contains('on'))renderPrecos();toast('Preços atualizados',3000);
 }
+const gravaPendentes=()=>document.querySelectorAll('#pBody [data-pp]').forEach(i=>i._grava&&i._grava());
+window.addEventListener('pagehide',gravaPendentes);document.addEventListener('visibilitychange',()=>{if(document.hidden)gravaPendentes()});
 $('#pNovo').onclick=formNovo;
 $('#bPrecos').onclick=()=>abrirPrecos();
 $('#pVolta').onclick=()=>{if(document.activeElement)document.activeElement.blur();if($('#nNome')&&$('#nNome').value.trim()&&!confirm('Sair sem salvar o produto novo?'))return;
