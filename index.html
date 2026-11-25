@@ -926,12 +926,15 @@ async function ligar(k){
   if(!confirm((trocou?'Trocar a ligação deste celular para outro bar?':'Ligar este celular ao bar online?')+'\nPreços, produtos e contas aparecem em todos os celulares ligados.'))return;
   const n=contas.length;let manda=true;
   if(n)manda=confirm('Este celular tem '+n+' conta(s).\n\nOK = juntar com as do bar\nCancelar = são testes, não enviar');
+  const np=produtos.filter(p=>p.preco>0).length;let mandaP=true;
+  if(np)mandaP=confirm('Este celular tem '+np+' preço(s) preenchido(s).\n\nOK = são os preços certos do bar, enviar\nCancelar = zerar neste celular');
   rodando=true;toast('Ligando…',8000);
   try{
     localStorage.setItem(CHK,k);
     let docs=[], desde=0, j;do{j=await rpc(desde,[]);docs=docs.concat(j.docs);if(j.docs.length)desde=j.docs[j.docs.length-1].r}while(j.mais);
     try{localStorage.setItem('bar_antes_online',JSON.stringify(estado()))}catch(e){}
     if(!manda){contas=[];mov=[];if(aberta){aberta=null;$('#sheet').classList.remove('on')}}
+    if(!mandaP)produtos.forEach(p=>p.preco=0);
     sync={ligado:true,desde,base:{}};
     const vivos=docs.filter(x=>!x.d), mortos=docs.filter(x=>x.d);
     if(vivos.some(x=>x.k[0]==='p')){
