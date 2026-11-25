@@ -127,12 +127,13 @@ a.btn{display:block;text-align:center;text-decoration:none}
 .pl{display:flex;align-items:center;gap:8px;border-bottom:1px solid #eee;padding:6px 0;font-size:16px}.pl span{flex:1;min-width:0}.pl small{display:block;color:#b26b00;font-size:12px}
 .pl input{width:96px;font-size:20px;padding:10px 8px;border:2px solid #cfd8d2;border-radius:10px;text-align:right}.pl.f input{border-color:#e8b84a;background:#fffaf0}
 .pl .sv{font-style:normal;font-size:13px;font-weight:700;color:#1f5c3a;white-space:nowrap}
+#bNuv.nk{color:#1f5c3a}#bNuv.nf{background:#fbe3e1;color:#b3261e}.cab .ic{white-space:nowrap;padding:6px 8px}
 .dif{border-radius:10px;padding:10px;margin:8px 0;font-size:15px;background:#e3f1e8;color:#1f5c3a}.dif.ruim{background:#fbe3e1;color:#7a1712}
 </style>
 </head>
 <body>
 <div class="top">
-  <div class="cab"><img class="logo" src="logo.png" alt="Centro da Coroa F.C."><b id="dia"></b><button class="ic" id="bResumo">Fechar dia</button><button class="ic" id="bDono">⚙︎</button></div>
+  <div class="cab"><img class="logo" src="logo.png" alt="Centro da Coroa F.C."><b id="dia"></b><button class="ic" id="bNuv">☁</button><button class="ic" id="bResumo">Fechar dia</button><button class="ic" id="bDono">⚙︎</button></div>
   <div class="rl"><div class="res" id="res"></div><button class="ic" id="bPrecos">💲 Preços</button></div>
   <input id="nome" placeholder="Escreva o nome…" autocomplete="off" autocapitalize="words">
   <button class="novo" id="novo"></button>
@@ -276,6 +277,7 @@ function precoDoApp(p){
 function zeraPrecos(){produtos.forEach(p=>{if(precoDoApp(p))p.preco=0;delete p.est});cardV=3}
 const PADRAO_TOP=['Original','Heineken','Amstel','Coca-Cola','Coxinha','Red Bull'];
 let produtos=cardapio(), cats=CATS0.map(c=>({...c}));
+let sync={ligado:false,desde:0,base:{}};
 let cardV=0, fotosV=FOTOS_V, contas=[], mov=[], aberta=null, db=null, ultimo=null, ultimoT=0, verDevendo=false, catAberta=null, travaCat=0, topIds=[];
 let dia=hoje();
 
@@ -307,15 +309,16 @@ const estado=()=>({produtos,contas,mov,cats,fotosV,cardV});
 function aplicar(s){contas=s.contas||[];mov=s.mov||[];if(Array.isArray(s.produtos)){fotosV=s.fotosV||0;cardV=s.cardV||0;produtos=s.produtos;cats=Array.isArray(s.cats)?s.cats:undefined}migrar()}
 
 const LS='bar_v2';
-function salvarLocal(){try{localStorage.setItem(LS,JSON.stringify(estado()));return true}catch(e){
+function salvarLocal(){try{localStorage.setItem(LS,JSON.stringify({...estado(),sync}));return true}catch(e){
   toast('⚠︎ Memória do app cheia: não salvou! Apague fotos tiradas no celular e envie o backup.',6000);return false}}
 function carregarLocal(){try{const raw=localStorage.getItem(LS), s=JSON.parse(raw||'null');if(!s){migrar();return}
+  if(s.sync&&s.sync.base)sync=s.sync;
   if((s.cardV||0)<CARD_V)try{if(!localStorage.getItem('bar_antes_preco0'))localStorage.setItem('bar_antes_preco0',raw)}catch(e){} // cópia de antes; falta de espaço não pode impedir de abrir
   const antigo=!Array.isArray(s.cats);
   if(antigo)try{if(!localStorage.getItem('bar_antes_categorias'))localStorage.setItem('bar_antes_categorias',raw)}catch(e){} // cópia intacta de antes da migração
   aplicar(s);if(antigo||(s.fotosV||0)<FOTOS_V||(s.cardV||0)<CARD_V)salvarLocal()}catch(e){}}
 let tmr=null;
-function salvar(){completaPrecos();const okLocal=salvarLocal();if(!db)return okLocal;clearTimeout(tmr);tmr=setTimeout(()=>{
+function salvar(){completaPrecos();const okLocal=salvarLocal();agendaSync(300);if(!db)return okLocal;clearTimeout(tmr);tmr=setTimeout(()=>{
   db.collection('bar').doc('estado').set({json:JSON.stringify(estado()),t:Date.now()}).catch(()=>{});
 },500);return okLocal}
 carregarLocal();
@@ -432,6 +435,8 @@ function renderConta(){
   const outras=devendo().filter(x=>x.id!==c.id&&x.nome.toLowerCase()===c.nome.toLowerCase());
   if(outras.length&&c.status==='aberta')h+=`<div class="aviso">⚠︎ ${esc(c.nome)} está devendo ${ver?brl(outras.reduce((s,x)=>s+total(x),0))+' ':''}de ${outras.map(x=>dbr(x.dia)).join(', ')}. <u data-ab="${outras[0].id}">Ver</u></div>`;
   if(c.status==='devendo')h+=`<div class="aviso">Ficou devendo desde ${dbr(c.dia)}. Quando pagar, toque em "Fechar conta".</div>`;
+  ['pix','dinheiro'].forEach(k=>{const b=$('#fechar [data-f='+k+']');if(b)b.textContent=(k==='pix'?'Pix ':'Dinheiro ')+brl(total(c))});
+  if(c.status==='paga'&&c.pagoEm&&c.itens.some(i=>i.t>c.pagoEm))h+=`<div class="aviso">⚠︎ Entrou item de outro celular depois do pagamento. Confira em Horários.</div>`;
   if(c.status==='paga')h+=`<div class="aviso ok">Paga em ${dbr(c.pagoDia)} no ${c.forma==='pix'?'Pix':'dinheiro'}.</div>`;
   if(ver&&semPreco(c).length)h+=`<div class="aviso">⚠︎ Falta o preço de: ${semPreco(c).map(esc).join(', ')}. O total ainda não inclui. <u id="cFalta">Preencher</u></div>`;
   h+=`<div class="lista"><b>Pegou:</b>${Object.keys(g).length?Object.entries(g).map(([pid,x])=>`<div class="pg${pid===ultimo?' novo1':''}"><span><b class="qq">${x.q}×</b> ${esc(x.nome)}</span>${ver?`<b>${x.v>0?brl(x.v):'sem preço'}</b>`:''}${trav?'':`<button class="menos" data-m="${pid}">− tirar 1</button>`}</div>`).join(''):' <span style="color:#888">nada ainda</span>'}<button class="hb" id="bHist">🕒 Horários ${verHist?'▲':'▼'}</button>${verHist?`<div class="hist">${htmlHist(c)}</div>`:''}</div>`;
@@ -597,7 +602,7 @@ function restaurar(f){
   const r=new FileReader();
   r.onload=()=>{try{
     const s=JSON.parse(r.result);if(s.app!=='controle-bar'||!Array.isArray(s.contas))throw 0;
-    if(!confirm(`Restaurar backup de ${new Date(s.gerado).toLocaleString('pt-BR')}?\n${s.contas.length} contas. O que está no celular agora será substituído.`))return;
+    if(!confirm(`Restaurar backup de ${new Date(s.gerado).toLocaleString('pt-BR')}?\n${s.contas.length} contas. O que está ${sync.ligado&&chave()?'em TODOS os celulares ligados':'no celular'} agora será substituído.`))return;
     salvarCopiaSeguranca();
     aplicar(s);salvar();renderDono();render();toast('Backup restaurado'); // backup antigo (sem categorias) passa pela migração
   }catch(e){toast('Arquivo de backup inválido')}};
@@ -817,6 +822,154 @@ $('#bPrecos').onclick=()=>abrirPrecos();
 $('#pVolta').onclick=()=>{if(document.activeElement)document.activeElement.blur();if($('#nNome')&&$('#nNome').value.trim()&&!confirm('Sair sem salvar o produto novo?'))return;
   $('#precos').classList.remove('on');$('#pForm').innerHTML='';topIds=maisPedidos();aberta?renderConta():render()};
 setTimeout(receberPrecos,300);window.addEventListener('hashchange',receberPrecos);
+
+/* ===== ONLINE (Supabase) =====
+ O celular continua funcionando sozinho (localStorage). Ligado pelo link secreto (#bar=…), compara o que mudou desde a última
+ conversa (sync.base = impressão de cada registro) e manda só isso; recebe o que os outros mudaram.
+ Registros: p:produto k:categoria c:conta i:conta:item h:conta:evento m:estoque. Item é registro próprio: dois celulares podem lançar
+ na mesma conta ao mesmo tempo. A chave pública abaixo não abre nada sem o segredo do link, que não fica no código. */
+const SB_URL='https://byaazwxzabkipwehddtz.supabase.co', SB_KEY='sb_publishable_VCJlNdphfw_6-Rc1McscbA_PYPNqkct';
+const CHK='bar_chave', chave=()=>{try{return localStorage.getItem(CHK)}catch(e){return null}};
+let rodando=false, denovo=false, tSync=null, falhas=0, ultimoOk=0, erroSync='';
+const canon=v=>Array.isArray(v)?'['+v.map(canon).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).filter(k=>v[k]!==undefined).sort().map(k=>JSON.stringify(k)+':'+canon(v[k])).join(',')+'}':JSON.stringify(v);
+function imp(v){const s=canon(v);let a=0xdeadbeef,b=0x41c6ce57;for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);a=Math.imul(a^c,2654435761);b=Math.imul(b^c,1597334677)}
+  a=Math.imul(a^(a>>>16),2246822507)^Math.imul(b^(b>>>13),3266489909);b=Math.imul(b^(b>>>16),2246822507)^Math.imul(a^(a>>>13),3266489909);return (4294967296*(2097151&b)+(a>>>0)).toString(36)}
+const CAB=['nome','dia','status','forma','pagoDia','abertaEm','pagoEm','devendoEm'];
+const so=(o,ks)=>{const r={};ks.forEach(k=>{if(o[k]!==undefined)r[k]=o[k]});return r};
+function mapa(){
+  const m={}, sem=(o,x)=>{const r={...o};delete r[x];return r};
+  produtos.forEach(p=>m['p:'+p.id]=sem(p,'id'));cats.forEach(c=>m['k:'+c.id]=sem(c,'id'));mov.forEach(x=>m['m:'+x.id]=sem(x,'id'));
+  contas.forEach(c=>{m['c:'+c.id]=so(c,CAB);
+    c.itens.forEach(i=>{if(!i.u)i.u=uid();m['i:'+c.id+':'+i.u]=sem(i,'u')});
+    (c.hist||[]).forEach(e=>{if(!e.u)e.u=uid();m['h:'+c.id+':'+e.u]=sem(e,'u')})});
+  return m;
+}
+function pendentes(m){
+  const sets=[], dels=[], ord='pkcihm';
+  Object.keys(m).forEach(k=>{const h=imp(m[k]);if(sync.base[k]!==h)sets.push({k,v:m[k],h})});
+  Object.keys(sync.base).forEach(k=>{if(!m[k])dels.push({k,d:true})});
+  sets.sort((a,b)=>ord.indexOf(a.k[0])-ord.indexOf(b.k[0]));dels.sort((a,b)=>(a.k[0]==='c')-(b.k[0]==='c')); // conta antes dos itens; apagar conta por último
+  return sets.concat(dels);
+}
+/* aplica um registro vindo do banco, sempre no mesmo objeto (a conta aberta na tela continua valendo) */
+const ID=/^[A-Za-z0-9_-]{1,60}$/;
+function poe(lista,id,v){let o=lista.find(x=>x.id===id);if(!o){o={id};lista.push(o)}Object.keys(o).forEach(k=>{if(k!=='id')delete o[k]});Object.assign(o,v,{id});return o}
+function aplicaDoc(k,v,d){
+  const [t,a,b]=k.split(':');if(!ID.test(a||''))return;
+  if(t==='p'){if(d)produtos=produtos.filter(x=>x.id!==a);else{const p=poe(produtos,a,v);p.preco=+p.preco||0;p.nome=String(p.nome||'');if(!ID.test(p.cat||''))p.cat=''}}
+  else if(t==='k'){if(d)cats=cats.filter(x=>x.id!==a);else{const c=poe(cats,a,v);c.nome=String(c.nome||'')}}
+  else if(t==='m'){if(d)mov=mov.filter(x=>x.id!==a);else poe(mov,a,v)}
+  else if(t==='c'){if(d){contas=contas.filter(x=>x.id!==a);return}
+    let c=contas.find(x=>x.id===a);if(!c){c={id:a,itens:[]};contas.push(c)}CAB.forEach(f=>{if(v[f]===undefined)delete c[f];else c[f]=v[f]});c.nome=String(c.nome||'');c.dia=String(c.dia||hoje())}
+  else if(t==='i'||t==='h'){const c=contas.find(x=>x.id===a);if(!c||!ID.test(b||''))return;
+    if(t==='h'&&!c.hist){if(d)return;c.hist=[]}
+    const l=t==='i'?c.itens:c.hist, ix=l.findIndex(x=>x.u===b);
+    if(d){if(ix>=0)l.splice(ix,1);return}
+    if(t==='i'&&!ID.test(v.p||''))return;
+    const o={...v,u:b};if(t==='i')o.preco=+o.preco||0;if(ix>=0)l[ix]=o;else{l.push(o);l.sort((x,y)=>x.t-y.t)}
+    c.t=Math.max(c.t||0,+o.t||0)}
+}
+function acertaCats(){const v=new Set(cats.map(c=>c.id));produtos.forEach(p=>{if(!v.has(p.cat))p.cat=''});contas.forEach(c=>{if(!c.t)c.t=c.abertaEm||0});
+  const o=new Map(CATS2.map((c,i)=>[c[0],i]));cats.sort((a,b)=>(o.get(a.id)??99)-(o.get(b.id)??99))}
+async function rpc(desde,ops){
+  const ac=new AbortController(), t=setTimeout(()=>ac.abort(),20000);
+  try{const r=await fetch(SB_URL+'/rest/v1/rpc/bar_sync',{method:'POST',signal:ac.signal,headers:{apikey:SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({p_chave:chave(),p_desde:desde,p_ops:ops})});
+    if(!r.ok)throw Error('http '+r.status);const j=await r.json();if(j.erro)throw Error(j.erro);return j}finally{clearTimeout(t)}
+}
+async function sincroniza(){
+  if(!chave()||!sync.ligado)return;
+  if(rodando){denovo=true;return}
+  rodando=true;denovo=false;
+  try{
+    let docs=[], desde=sync.desde, resta=true;
+    while(resta){
+      let lote=[], tam=0;for(const o of pendentes(mapa())){const n=JSON.stringify(o).length;if(lote.length>=200||(lote.length&&tam+n>400000))break;lote.push(o);tam+=n}
+      const j=await rpc(desde,lote.map(({k,v,d})=>d?{k,d}:{k,v}));
+      lote.forEach(o=>{if(o.d)delete sync.base[o.k];else sync.base[o.k]=o.h});
+      docs=docs.concat(j.docs);if(j.docs.length)desde=j.docs[j.docs.length-1].r;
+      resta=j.mais||lote.length>=200||tam>300000;
+    }
+    const mudou=recebe(docs);sync.desde=desde;salvarLocal();falhas=0;erroSync='';ultimoOk=Date.now();
+    if(mudou)repinta();
+  }catch(e){falhas++;erroSync=/chave/.test(e.message)?'chave':'rede';salvarLocal()}
+  finally{rodando=false;nuvem();if(denovo)agendaSync(300)}
+}
+/* o que mudou aqui enquanto a resposta vinha não é pisado: sobe na próxima */
+function recebe(docs){
+  const m=mapa(), ult=new Map();docs.forEach(x=>ult.set(x.k,x));
+  const l=[...ult.values()].filter(x=>(m[x.k]?imp(m[x.k]):undefined)===sync.base[x.k]&&(x.d?m[x.k]:!m[x.k]||imp(x.v)!==sync.base[x.k]));
+  l.sort((a,b)=>'pkcihm'.indexOf(a.k[0])-'pkcihm'.indexOf(b.k[0]));
+  l.forEach(x=>aplicaDoc(x.k,x.v,x.d));
+  if(!l.length)return false;
+  const d=mapa();l.forEach(x=>{if(d[x.k])sync.base[x.k]=imp(d[x.k]);else delete sync.base[x.k]});
+  // apagar uma conta leva junto os itens dela que este celular ainda tinha
+  Object.keys(sync.base).forEach(k=>{if((k[0]==='i'||k[0]==='h')&&!d[k]&&!m[k])delete sync.base[k]});
+  acertaCats();completaPrecos();return true;
+}
+function repinta(){
+  if(aberta&&!contas.includes(aberta)){aberta=null;$('#sheet').classList.remove('on');toast('Esta conta foi apagada em outro celular',3000)}
+  if(aberta)renderConta();render();botaoPrecos();
+  if($('#precos').classList.contains('on')){if(document.activeElement&&document.activeElement.dataset.pp)filtros();else if(!$('#nNome'))renderPrecos()}
+  if($('#resumo').classList.contains('on'))abrirResumo();
+}
+function agendaSync(ms){if(!chave()||!sync.ligado)return;clearTimeout(tSync);tSync=setTimeout(sincroniza,ms)}
+function nuvem(){
+  const b=$('#bNuv');if(!chave()||!sync.ligado){b.textContent='☁ ligar';b.className='ic';return}
+  const n=falhas?pendentes(mapa()).length:0;
+  b.textContent=erroSync==='chave'?'⚠ link':falhas?'⚠'+(n||''):'☁ ✓';b.className='ic '+(falhas?'nf':'nk');
+}
+/* primeira vez: junta o que está neste celular com o que já está no banco */
+async function ligar(k){
+  if(rodando)return;
+  const antes=chave(), trocou=antes&&antes!==k;
+  if(antes===k&&sync.ligado){toast('Este celular já está ligado ✓',2500);sincroniza();return}
+  if(!confirm((trocou?'Trocar a ligação deste celular para outro bar?':'Ligar este celular ao bar online?')+'\nPreços, produtos e contas aparecem em todos os celulares ligados.'))return;
+  const n=contas.length;let manda=true;
+  if(n)manda=confirm('Este celular tem '+n+' conta(s).\n\nOK = juntar com as do bar\nCancelar = são testes, não enviar');
+  rodando=true;toast('Ligando…',8000);
+  try{
+    localStorage.setItem(CHK,k);
+    let docs=[], desde=0, j;do{j=await rpc(desde,[]);docs=docs.concat(j.docs);if(j.docs.length)desde=j.docs[j.docs.length-1].r}while(j.mais);
+    try{localStorage.setItem('bar_antes_online',JSON.stringify(estado()))}catch(e){}
+    if(!manda){contas=[];mov=[];if(aberta){aberta=null;$('#sheet').classList.remove('on')}}
+    sync={ligado:true,desde,base:{}};
+    const vivos=docs.filter(x=>!x.d), mortos=docs.filter(x=>x.d);
+    if(vivos.some(x=>x.k[0]==='p')){
+      const loc=produtos, padrao=new Set([...CARD0.map((x,i)=>'m'+(i+1)),...Object.values(NOVOS2).flat().map(x=>'n'+normal(Array.isArray(x)?x[0]:x).replace(/ /g,''))]);
+      const rem=new Map(vivos.filter(x=>x.k[0]==='p').map(x=>[x.k.slice(2),x.v])), porNome=new Map([...rem].map(([i,v])=>[normal(v.nome),i])), troca={};
+      produtos=[];
+      mortos.concat(vivos.filter(x=>x.k[0]!=='p')).sort((a,b)=>'pkcihm'.indexOf(a.k[0])-'pkcihm'.indexOf(b.k[0])).forEach(x=>aplicaDoc(x.k,x.v,x.d));
+      rem.forEach((v,i)=>aplicaDoc('p:'+i,v));
+      const d=mapa();vivos.forEach(x=>{if(d[x.k])sync.base[x.k]=imp(d[x.k])});
+      const fora=new Set(mortos.map(x=>x.k));
+      loc.forEach(p=>{const i=rem.has(p.id)?p.id:porNome.get(normal(p.nome)), r=i&&produtos.find(x=>x.id===i);
+        if(r){if(i!==p.id)troca[p.id]=i;
+          if(!(r.preco>0)&&p.preco>0)r.preco=p.preco; // preço já preenchido neste celular
+          if(String(p.foto||'').startsWith('data:')&&!String(r.foto||'').startsWith('data:'))r.foto=p.foto}
+        else if(!fora.has('p:'+p.id)&&!padrao.has(p.id)&&!EXEMPLOS[p.id])produtos.push(p)});
+      contas.forEach(c=>c.itens.forEach(x=>{if(troca[x.p]&&!sync.base['i:'+c.id+':'+x.u])x.p=troca[x.p]}));mov.forEach(x=>{if(troca[x.p])x.p=troca[x.p]});
+      cats=cats.filter(c=>sync.base['k:'+c.id]||produtos.some(p=>p.cat===c.id));
+      acertaCats();
+    }
+    completaPrecos();salvarLocal();falhas=0;erroSync='';rodando=false;repinta();await sincroniza();
+    toast(falhas?'Ligado; envio quando a internet voltar':'☁ Celular ligado ✓',3000);
+  }catch(e){if(antes)localStorage.setItem(CHK,antes);else localStorage.removeItem(CHK);toast(/chave/.test(e.message)?'Link do bar inválido':'Sem internet: abra o link de novo',4000)}
+  finally{rodando=false;nuvem()}
+}
+const achaChave=t=>{const m=String(t||'').match(/(?:bar=|^)([A-Za-z0-9_-]{20,100})\s*$/);return m&&m[1]};
+function lerLigacao(){const m=location.hash.match(/^#bar=([A-Za-z0-9_-]{20,100})$/);if(!m)return;history.replaceState(null,'',location.pathname);ligar(m[1])}
+$('#bNuv').onclick=async()=>{
+  if(!chave()||!sync.ligado||erroSync==='chave'){const t=prompt('Cole aqui o link secreto do bar:');if(!t)return;const k=achaChave(t.trim());if(k)ligar(k);else toast('Link inválido',2500);return}
+  await sincroniza();
+  if(falhas){toast('Sem internet. Está tudo guardado neste celular e sobe sozinho depois.',4000);return}
+  if(!confirm('Online ✓ Tudo salvo.\n\nLigar outro celular? Envie o link secreto só para quem pode ver as contas.'))return;
+  const u=location.origin+location.pathname+'#bar='+chave();
+  if(navigator.share){try{await navigator.share({text:'Link secreto do bar (não repasse):\n'+u});return}catch(e){if(e&&e.name==='AbortError')return}}
+  prompt('Copie o link secreto:',u);
+};
+setInterval(()=>{if(!document.hidden&&!(falhas>2&&Date.now()%5))sincroniza()},4000);
+window.addEventListener('online',()=>agendaSync(200));document.addEventListener('visibilitychange',()=>{if(!document.hidden)agendaSync(100)});
+setTimeout(()=>{nuvem();lerLigacao();agendaSync(100)},300);window.addEventListener('hashchange',lerLigacao);
 
 /* ===== ENTRADA PRONTA (lida de foto da nota/pedido) =====
  Chega pelo link  ...#entrada=<base64url de {"itens":[{"nome":"Brahma lata","q":48,"custo":120}]}>
