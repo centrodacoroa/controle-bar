@@ -120,7 +120,7 @@ a.btn{display:block;text-align:center;text-decoration:none}
 #bPrecos.falta{background:#fff3cd;border-color:#e8d48a;font-weight:700}
 .px{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 12px 0}.px .btn{padding:12px 6px;font-size:16px}
 #pForm{max-height:60vh;overflow:auto;padding:0 12px;flex:none}
-.pfil{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:10px 12px 0}
+.pfil{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:6px;padding:10px 12px 0}
 .pfil button{border:0;border-radius:10px;padding:10px 2px;font-size:14px;font-weight:700;background:#eee;color:#555}.pfil button.on{background:#1f5c3a;color:#fff}
 .pc h4{margin:14px 0 4px;font-size:15px;color:#1f5c3a;display:flex;justify-content:space-between;gap:8px;align-items:center}
 .pc h4 button,.pl .okk{border:0;border-radius:8px;background:#e3f1e8;color:#1f5c3a;font-size:13px;font-weight:700;padding:8px 10px}
@@ -249,7 +249,7 @@ const NOVOS2={cerveja:['Amstel','Antarctica'],
 const SAI2=['Brahma','Skol','Kibe','Enroladinho de salsicha','Pastel','Chicabon','Fruttare','Eskibon','Cornetto','Magnum','Bis','Kit Kat','Snickers','Prestígio','Sonho de Valsa','Bala Fini','Bala avulsa','Pirulito','Paçoca','Pé de moleque','Doce de leite'];
 const MUDA2={'Esfiha de carne':'Esfiha','Trident':'Trident Menta Verde','Halls':'Halls Extra Forte'};
 const CERTO2=['Original','Heineken','Corona','Coca-Cola','Coca-Cola Zero','Guaraná Antarctica','Fanta Laranja','Sprite']; // preços que vieram do bar
-const CARD_V=2;
+const CARD_V=3;
 function cardapio2(){
   const v1={};CARD0.forEach(x=>v1[x[1]]=x);
   // só mexe no que ainda é do cardápio v1 (mesmo nome e preço): o que o dono criou ou acertou fica como está
@@ -264,8 +264,16 @@ function cardapio2(){
   const usadas=new Set(produtos.map(p=>p.cat)), ant={}, nomeV1={};cats.forEach(c=>ant[c.id]=c);CATS0.forEach(c=>nomeV1[c.id]=c.nome);
   const base=CATS2.filter(c=>ant[c[0]]||usadas.has(c[0])).map(([id,e,nome])=>ant[id]&&ant[id].nome!==nomeV1[id]?ant[id]:{id,e,nome});
   cats=base.concat(cats.filter(c=>!CATS2.some(x=>x[0]===c.id)));
-  cardV=CARD_V;
+  cardV=2;
 }
+/* v3: zera os preços que vieram com o app (eram fictícios). Preço que o dono digitou ou confirmou com ✓ fica.
+ Nos que nunca foram marcados "conferir" (600 ml, refri, paleta), zera se ainda for o valor original. */
+function precoDoApp(p){
+  if(p.est)return true;
+  const o=CARD0.find(x=>x[1]===p.nome);if(o&&CERTO2.includes(p.nome))return p.preco===o[2];
+  const l=NOVOS2.sorvete.find(x=>x[0]===p.nome);return !!l&&p.preco===l[1];
+}
+function zeraPrecos(){produtos.forEach(p=>{if(precoDoApp(p))p.preco=0;delete p.est});cardV=3}
 const PADRAO_TOP=['Original','Heineken','Amstel','Coca-Cola','Coxinha','Red Bull'];
 let produtos=cardapio(), cats=CATS0.map(c=>({...c}));
 let cardV=0, fotosV=FOTOS_V, contas=[], mov=[], aberta=null, db=null, ultimo=null, ultimoT=0, verDevendo=false, catAberta=null, travaCat=0, topIds=[];
@@ -288,7 +296,8 @@ function migrar(){
     });
     produtos=novos.concat(manter);
   }
-  if(cardV<CARD_V)cardapio2();
+  if(cardV<2)cardapio2();
+  if(cardV<3)zeraPrecos();
   const v=ids();produtos.forEach(p=>{if(!v.has(p.cat))p.cat=''});
   /* foto: undefined = nunca teve (pode ganhar a do app); '' = o dono tirou; 'fotos/…' = do app; 'data:…' = tirada no celular */
   // v2 (fotos do bar): até a v1 o app gravava '' em quem não tinha foto do app, então nessa subida '' também recebe a foto nova
@@ -301,7 +310,7 @@ const LS='bar_v2';
 function salvarLocal(){try{localStorage.setItem(LS,JSON.stringify(estado()));return true}catch(e){
   toast('⚠︎ Memória do app cheia: não salvou! Apague fotos tiradas no celular e envie o backup.',6000);return false}}
 function carregarLocal(){try{const raw=localStorage.getItem(LS), s=JSON.parse(raw||'null');if(!s){migrar();return}
-  if((s.cardV||0)<CARD_V)try{if(!localStorage.getItem('bar_antes_cardapio2'))localStorage.setItem('bar_antes_cardapio2',raw)}catch(e){} // cópia de antes; falta de espaço não pode impedir de abrir
+  if((s.cardV||0)<CARD_V)try{if(!localStorage.getItem('bar_antes_preco0'))localStorage.setItem('bar_antes_preco0',raw)}catch(e){} // cópia de antes; falta de espaço não pode impedir de abrir
   const antigo=!Array.isArray(s.cats);
   if(antigo)try{if(!localStorage.getItem('bar_antes_categorias'))localStorage.setItem('bar_antes_categorias',raw)}catch(e){} // cópia intacta de antes da migração
   aplicar(s);if(antigo||(s.fotosV||0)<FOTOS_V||(s.cardV||0)<CARD_V)salvarLocal()}catch(e){}}
@@ -428,8 +437,9 @@ function renderConta(){
     if(top.length)h+=`<div class="tit">Mais pedidos</div><div class="prods">${top.map(p=>btn(p,1)).join('')}</div>`;
     const gs=vendaveis(), ia=gs.findIndex(g=>g.id===catAberta);
     if(ia<0)catAberta=null;
+    if(!gs.length)h+='<div class="aviso">Nenhum produto com preço ainda. Toque em ✓ Pronto e depois em 💲 Faltam preços.</div>';
     const ins=ia<0?-1:Math.min(Math.floor(ia/3)*3+2,gs.length-1); // painel entra logo abaixo da linha da categoria tocada
-    h+=`<div class="tit" style="margin-top:16px">Categorias</div><div class="cats">${gs.map((g,i)=>{
+    h+=`${gs.length?'<div class="tit" style="margin-top:16px">Categorias</div>':''}<div class="cats">${gs.map((g,i)=>{
       const n=g.itens.reduce((s,p)=>s+(cont[p.id]||0),0);
       let b=`<button class="cat${i===ia?' on':''}" data-c="${g.id}"><span class="e">${esc(g.e)}</span>${esc(g.nome)}${g.itens.length===1?`<span class="p">${brl(g.itens[0].preco)}</span>`:''}${bq(n)}</button>`;
       if(i===ins){const a=gs[ia];b+=`<div class="abre">${a.itens.map(p=>btn(p,0)).join('')}</div>`}
@@ -718,7 +728,7 @@ const lerPreco=t=>{t=String(t).trim().replace(/r\$|\s/gi,'');if(t.includes(','))
 const faltam=()=>produtos.filter(p=>!(p.preco>0)), conferir=()=>produtos.filter(p=>p.preco>0&&p.est);
 function botaoPrecos(){const n=faltam().length,b=$('#bPrecos');b.textContent=n?'💲 Faltam '+n+' preços':'💲 Preços';b.classList.toggle('falta',n>0)}
 function abrirPrecos(novo){pFil=faltam().length?'falta':conferir().length?'conf':'todos';$('#precos').classList.add('on');$('#pForm').innerHTML='';renderPrecos();if(novo)formNovo()}
-function filtros(){$('#pFil').innerHTML=[['falta','Falta ('+faltam().length+')'],['conf','Conferir ('+conferir().length+')'],['todos','Todos ('+produtos.length+')']].map(([k,t])=>`<button data-fl="${k}" class="${k===pFil?'on':''}">${t}</button>`).join('');
+function filtros(){$('#pFil').innerHTML=[['falta','Falta ('+faltam().length+')'],...(conferir().length?[['conf','Conferir ('+conferir().length+')']]:[]),['todos','Todos ('+produtos.length+')']].map(([k,t])=>`<button data-fl="${k}" class="${k===pFil?'on':''}">${t}</button>`).join('');
   $('#pFil').querySelectorAll('button').forEach(b=>b.onclick=()=>{pFil=b.dataset.fl;renderPrecos();$('#pBody').scrollTop=0});botaoPrecos()}
 function renderPrecos(){
   gravaPendentes();filtros();
@@ -769,7 +779,7 @@ function formNovo(){
   $('#nNome').focus();
 }
 function linkPrecos(){
-  const d={v:1,p:produtos.filter(p=>p.preco>0).map(p=>[p.id,p.preco,p.est?1:0,p.nome,p.cat||'']),c:cats.filter(c=>!CATS2.some(x=>x[0]===c.id)).map(c=>[c.id,c.e,c.nome])};
+  const d={v:2,p:produtos.filter(p=>p.preco>0).map(p=>[p.id,p.preco,p.est?1:0,p.nome,p.cat||'']),c:cats.filter(c=>!CATS2.some(x=>x[0]===c.id)).map(c=>[c.id,c.e,c.nome])};
   return location.href.split('#')[0]+'#precos='+btoa(unescape(encodeURIComponent(JSON.stringify(d)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 }
 $('#pEnviar').onclick=async()=>{
@@ -784,7 +794,7 @@ function receberPrecos(){
   history.replaceState(null,'',location.pathname);
   let d;try{d=JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g,'+').replace(/_/g,'/')))));if(!Array.isArray(d.p))throw 0}catch(e){toast('Link de preços inválido',3000);return}
   const id=x=>typeof x==='string'&&/^[a-z0-9]{1,60}$/i.test(x), tx=x=>typeof x==='string'&&x.trim()&&x.length<=60;
-  const l=d.p.filter(x=>Array.isArray(x)&&id(x[0])&&typeof x[1]==='number'&&x[1]>0&&x[1]<100000&&tx(x[3]));
+  const l=d.p.filter(x=>Array.isArray(x)&&id(x[0])&&typeof x[1]==='number'&&x[1]>0&&x[1]<100000&&tx(x[3])&&!x[2]&&!(d.v<2&&precoDoApp({nome:x[3],preco:x[1]}))); // link de antes não traz de volta preço fictício
   const acha=x=>produtos.find(p=>p.id===x[0])||produtos.find(p=>normal(p.nome)===normal(x[3]));
   const muda=l.filter(x=>{const p=acha(x);return p&&(p.preco!==x[1]||!!p.est!==!!x[2])}), novos=l.filter(x=>!acha(x));
   if(!muda.length&&!novos.length){toast('Os preços já estão iguais',3000);return}
