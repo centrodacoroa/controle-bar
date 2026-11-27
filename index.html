@@ -100,7 +100,8 @@ a.btn{display:block;text-align:center;text-decoration:none}
 .fechar .fits label{display:flex;gap:10px;align-items:center;padding:7px 2px;font-size:16px;border-bottom:1px solid #eee}.fechar .fits b{margin-left:auto}.fechar .fits input{width:20px;height:20px}
 .fechar input.fv{width:100%;font-size:17px;padding:10px;border:1px solid #ccc;border-radius:10px}
 .troco{display:flex;align-items:center;gap:8px;font-size:15px;color:#555}.troco input{width:110px;font-size:17px;padding:8px;border:1px solid #ccc;border-radius:10px}.troco b{color:#1f5c3a}
-.cli1{display:inline-block;border:0;background:#eef4f0;color:#1f5c3a;border-radius:10px;padding:6px 10px;font-size:14px;margin:0 0 10px}
+.cli1{display:inline-block;border:0;background:#eef4f0;color:#1f5c3a;border-radius:10px;padding:6px 10px;font-size:14px;margin:0 6px 10px 0;text-decoration:none}
+a.cobra{flex:none;background:#1f8f4e;color:#fff;border-radius:10px;padding:9px 10px;font-size:14px;font-weight:700;text-decoration:none;white-space:nowrap}
 .acaba{background:#fff3cd;color:#7a5a00;border-radius:12px;padding:10px 12px;margin:8px 12px 4px 40px;font-size:15px;cursor:pointer}
 .barra{height:10px;background:#1f5c3a;border-radius:5px;min-width:2px}
 .rel .bl{display:grid;grid-template-columns:62px 1fr 92px;gap:8px;align-items:center;font-size:14px;padding:2px 0}
@@ -418,7 +419,7 @@ function render(){
   // caixa do dia escondido (o cliente vê a tela): toque mostra por 6 s
   $('#res').innerHTML=verCaixa?`Aberto ${brl(ab.reduce((s,c)=>s+total(c),0))} · Recebido ${brl(rec)}`:'<span class="rb">👁 Ver caixa do dia</span>';
   const q=$('#nome').value.trim().toLowerCase(), qn=normal(q), qd=telD(q), f=c=>!q||c.nome.toLowerCase().includes(q)||(qn&&normal(c.nome).includes(qn))||(qd.length>=4&&telD((cliDe(c.nome)||{}).tel).includes(qd)); // nome (com ou sem acento) ou celular
-  const linha=(c,cls)=>`<div class="linha ${cls}" data-id="${c.id}"><span class="n">${esc(c.nome)}<span class="r">${cls==='dev'?'devendo desde '+dbr(c.dia)+' · ':cls==='cobrar'?'entrou item depois de pagar · ':cls==='pago'?(c.pagoEm?'pagou '+hora(c.pagoEm)+' · ':''):'desde '+(c.dia!==dia?dbr(c.dia)+' ':'')+hora(abertaEm(c))+' · '}${esc(resumo(c))}</span></span></div>`; // sem o total: o cliente pode ver esta tela (o total fica no "Ver total" da conta)
+  const linha=(c,cls)=>`<div class="linha ${cls}" data-id="${c.id}"><span class="n">${esc(c.nome)}<span class="r">${cls==='dev'?'devendo desde '+dbr(c.dia)+' · ':cls==='cobrar'?'entrou item depois de pagar · ':cls==='pago'?(c.pagoEm?'pagou '+hora(c.pagoEm)+' · ':''):'desde '+(c.dia!==dia?dbr(c.dia)+' ':'')+hora(abertaEm(c))+' · '}${esc(resumo(c))}</span></span>${cls==='dev'&&zapConta(c)?`<a class="cobra" target="_blank" rel="noopener" href="${zapConta(c)}">📲 Cobrar pelo whats</a>`:''}</div>`; // sem o total: o cliente pode ver esta tela (o total fica no "Ver total" da conta)
   const a=ab.filter(f).sort((x,y)=>y.t-x.t);
   const pg=doDia().filter(c=>c.status==='paga'&&!falta(c)&&f(c)), co=acobrar().filter(f);
   const dv=devendo().filter(f);
@@ -434,10 +435,12 @@ function render(){
     if(sug.length)h=`<div class="sep">Clientes</div>`+sug.map(o=>`<div class="linha" data-cn="${esc(o.x.nome)}"><span class="n">${esc(o.x.nome)}<span class="r">${o.x.tel?'📱 final '+telD(o.x.tel).slice(-4)+' · ':''}${o.cs.length?o.cs.length+' conta(s) · última '+dbr(o.cs[0].dia):'sem contas ainda'}${o.dev?' · devendo':''}</span></span></div>`).join('')+(h?'<div class="sep">Contas</div>':'')+h}
   $('#folha').innerHTML=h||`<div class="vazio">${q?'Ninguém com esse nome hoje.':'Folha em branco. Escreva o primeiro nome lá em cima.'}</div>`;
   if(h&&!q)$('#folha').insertAdjacentHTML('beforeend','<div class="vazio" style="min-height:120px"></div>');
+
   const ac=q?[]:acabando();
   if(ac.length){$('#folha').insertAdjacentHTML('afterbegin',`<div class="acaba" id="acaba">⚠︎ Acabando: ${ac.map(l=>esc(l.p.nome)+' ('+l.tem+')').join(', ')}</div>`);
     $('#acaba').onclick=async()=>{if(!await pedirPin())return;donoAba='estoque';$('#dono').classList.add('on');renderDono()}}
   $('#folha').querySelectorAll('.linha').forEach(l=>l.onclick=()=>l.dataset.cn?criar(l.dataset.cn):abrir(l.dataset.id));
+  $('#folha').querySelectorAll('a.cobra').forEach(a=>a.onclick=e=>e.stopPropagation()); // abre o WhatsApp, não a conta
   const sd=$('#sepDev');if(sd&&!q)sd.onclick=()=>{verDevendo=!verDevendo;render()};
   const exato=ab.some(c=>normal(c.nome)===normal(q));
   const b=$('#novo');b.style.display=q&&!exato?'block':'none';b.textContent='+ Novo: '+cap($('#nome').value.trim());
@@ -558,6 +561,13 @@ $('#bVolta').onclick=()=>{
   const c=aberta;if(c&&c.status==='aberta'&&!c.itens.length){contas=contas.filter(x=>x!==c);salvar()}
   $('#sheet').classList.remove('on');aberta=null;$('#nome').value='';render()};
 const fecharAberto=()=>$('#fechar').classList.contains('on');
+/* "Cobrar pelo whats" no card de quem ficou devendo (celular da ficha): abre a conversa com a mensagem pronta, alguém toca em enviar */
+function textoConta(c){
+  const g=Object.values(agrupa(c.itens)), pg=pagsDe(c).slice().sort((a,b)=>(a.t||0)-(b.t||0)), rs=aPagar(c);
+  return `*Centro da Coroa - conta de ${c.nome}*\n${nomeDia(c.dia)}\n\n`+g.map(x=>`${x.q}x ${x.nome} = ${brl(x.v)}`).join('\n')+`\n\n*Total: ${brl(total(c))}*`
+    +(pg.length?`\nPago: `+pg.map(x=>brl(x.v)+' '+fnome(x.f)).join(' + '):'')+(c.status==='devendo'?`\n*Ficou devendo: ${brl(rs)}*`:!pg.length?'':rs>0?`\n*Falta: ${brl(rs)}*`:'\nConta paga ✓')+`\n\nObrigado! 🍻`;
+}
+function zapConta(c){const x=cliDe(c.nome), u=x&&zapDe(x.tel);return u?u+'?text='+encodeURIComponent(textoConta(c)):''}
 function reabrirConta(c){evento(c,{t:Date.now(),k:'reabriu'});c.status='aberta';['forma','pagoDia','pagoEm','pagoV'].forEach(k=>delete c[k]);
   const pt=(c.extra||[]).filter(x=>x.pt);if(pt.length)c.extra=pt;else delete c.extra; // parte paga antes de fechar continua valendo
   $('#fechar').classList.remove('on');fx=null;salvar();toast('Reaberta');renderConta()}
