@@ -448,7 +448,7 @@ function render(){
   $('#folha').querySelectorAll('a.cobra').forEach(a=>a.onclick=e=>e.stopPropagation()); // abre o WhatsApp, não a conta
   const sd=$('#sepDev');if(sd&&!q)sd.onclick=()=>{verDevendo=!verDevendo;render()};
   const exato=ab.some(c=>normal(c.nome)===normal(q));
-  const b=$('#novo');b.style.display=q&&!exato&&/\p{L}/u.test(q)?'block':'none'; // só número = busca pelo celular, não cria contab.textContent='+ Novo: '+cap($('#nome').value.trim());
+  const b=$('#novo');b.style.display=q&&!exato&&/\p{L}/u.test(q)?'block':'none';b.textContent='+ Novo: '+cap($('#nome').value.trim()); // só número = busca pelo celular, não cria conta
   if(!q)$('#dup').style.display='none';
 }
 
