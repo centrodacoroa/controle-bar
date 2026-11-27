@@ -94,7 +94,14 @@ a.btn{display:block;text-align:center;text-decoration:none}
 .abas.t3{grid-template-columns:1fr 1fr 1fr}
 .abas.t4{grid-template-columns:1fr 1fr 1fr 1fr}.abas.t4 button{font-size:14px;padding:10px 2px}
 .abas.t5{display:flex;overflow-x:auto;scrollbar-width:none}.abas.t5::-webkit-scrollbar{display:none}.abas.t5 button{flex:none;font-size:14px;padding:10px 12px}
-.b5{background:#5b3fa0;color:#fff}
+.b5{background:#8a6fd1;color:#fff}.b6{background:#4a2a8c;color:#fff} /* débito mais claro, crédito mais forte */
+.bpix{background:#32BCAD;color:#fff} /* cor do Pix */
+.fechar .btn.fp{padding:15px 6px;font-size:18px}.fechar .btn.fp .fn{display:flex;align-items:center;justify-content:center;gap:8px}
+.fechar .ftot{display:flex;justify-content:space-between;align-items:baseline;padding:2px 4px 4px;font-size:16px;color:#444}.fechar .ftot b{font-size:28px;color:#1f5c3a}
+.fechar .fsub{font-size:14px;color:#666;padding:0 4px;margin-top:-6px}
+.fechar .btn.fp svg,.fechar .btn.fp .ic{width:22px;height:22px;flex:none;font-size:20px;line-height:22px}
+.fechar .btn.volta{background:#fff;color:#1f5c3a;border:2px solid #1f5c3a}
+.fechar .btn.devm{background:none;border:1px solid #e8b4b0;color:#b3261e;padding:7px 6px;font-size:14px;font-weight:600;justify-self:center;width:60%} /* pendura é rara: discreto, no fim */
 .fechar{max-height:58vh;overflow-y:auto}
 .fechar .fi{font-size:15px;color:#333;padding:2px}
 .fechar .dv{display:flex;gap:6px}.fechar .dv button{flex:1;border:0;border-radius:10px;padding:10px 0;font-size:16px;font-weight:700;background:#eee;color:#333}.fechar .dv button.on{background:#1f5c3a;color:#fff}
@@ -499,13 +506,13 @@ let verTot=false, verTotT=null;
 function mostrarTotal(on){clearTimeout(verTotT);verTot=on;if(on)verTotT=setTimeout(()=>{verTot=false;if(aberta)renderConta()},6000);if(aberta)renderConta()}
 function abrir(id){ultimo=null;fx=null;verTel=false;catAberta=null;verHist=false;clearTimeout(verTotT);verTot=false;topIds=maisPedidos();contaVendas();aberta=contas.find(c=>c.id===id);$('#dup').style.display='none';$('#fechar').classList.remove('on');$('#sheet').classList.add('on');renderConta()}
 function renderConta(){
-  const c=aberta, g=agrupa(c.itens), trav=c.status!=='aberta';
+  const c=aberta, g=agrupa(c.itens), trav=c.status!=='aberta', pagando=fecharAberto(); // pagando: tela limpa (só o que pegou + pagamento)
   const ver=verTot||$('#fechar').classList.contains('on');
   $('#sNome').textContent=c.nome;
   $('#sTot').innerHTML=ver?`<button class="vt on" id="bTot">${brl(total(c))}</button>`:`<button class="vt" id="bTot">👁 Ver total</button>`;
   $('#bTot').onclick=()=>mostrarTotal(!verTot);
   let h='';
-  {const cl=cliDe(c.nome);
+  if(!pagando){const cl=cliDe(c.nome);
    if(verTel)h+=`<div class="cx" style="margin-top:0"><label>Celular de ${esc(c.nome)} (com DDD)</label><input id="cTelI" data-g="tel" inputmode="tel" placeholder="(21) 99999-9999" value="${esc(cl&&cl.tel?telFmt(cl.tel):'')}"><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px"><button class="btn b1" id="cTelX">Cancelar</button><button class="btn b3" id="cTelOk">Salvar</button></div></div>`;
    else h+=`<button class="cli1" id="cTel">${cl&&cl.tel?'📱 '+telFmt(cl.tel):'📱 Cadastrar celular'}</button>`+(cl&&cl.casa?'<span class="cli1">🏠 funcionário</span>':'')}
   const outras=devendo().filter(x=>x.id!==c.id&&mesmo(x.nome,c.nome));
@@ -517,8 +524,8 @@ function renderConta(){
   if(c.status==='casa')h+=`<div class="aviso ok">🏠 Consumo da casa / funcionário: não entra no caixa nem nas vendas (o estoque desconta).</div>`;
   if(c.status==='paga')h+=`<div class="aviso ok">Paga em ${dbr(c.pagoDia)}: ${ver?pagsDe(c).map(x=>brl(x.v)+' '+fnome(x.f)).join(' + '):'no '+[...new Set(pagsDe(c).map(x=>fnome(x.f)))].join(' e ')}.</div>`;
   if(ver&&semPreco(c).length)h+=`<div class="aviso">⚠︎ Falta o preço de: ${semPreco(c).map(esc).join(', ')}. O total ainda não inclui. <u id="cFalta">Preencher</u></div>`;
-  h+=`<div class="lista"><b>Pegou:</b>${Object.keys(g).length?Object.entries(g).map(([pid,x])=>`<div class="pg${pid===ultimo?' novo1':''}"><span><b class="qq">${x.q}×</b> ${esc(x.nome)}</span>${ver?`<b>${x.v>0?brl(x.v):'sem preço'}</b>`:''}${trav?'':`<button class="menos" data-m="${pid}">− tirar 1</button>`}</div>`).join(''):' <span style="color:#888">nada ainda</span>'}<button class="hb" id="bHist">🕒 Horários ${verHist?'▲':'▼'}</button>${verHist?`<div class="hist">${htmlHist(c)}</div>`:''}</div>`;
-  if(!trav){const cont={};c.itens.forEach(i=>cont[i.p]=(cont[i.p]||0)+1);
+  h+=`<div class="lista"><b>Pegou:</b>${Object.keys(g).length?Object.entries(g).map(([pid,x])=>`<div class="pg${pid===ultimo?' novo1':''}"><span><b class="qq">${x.q}×</b> ${esc(x.nome)}</span>${ver?`<b>${x.v>0?brl(x.v):'sem preço'}</b>`:''}${trav||pagando?'':`<button class="menos" data-m="${pid}">− tirar 1</button>`}</div>`).join(''):' <span style="color:#888">nada ainda</span>'}${pagando?'':`<button class="hb" id="bHist">🕒 Horários ${verHist?'▲':'▼'}</button>${verHist?`<div class="hist">${htmlHist(c)}</div>`:''}`}</div>`;
+  if(!trav&&!fecharAberto()){const cont={};c.itens.forEach(i=>cont[i.p]=(cont[i.p]||0)+1); // pagando: produtos somem (não lança sem querer)
     const bq=n=>n?`<span class="q">${n}</span>`:'';
     const btn=(p,emo)=>`<button class="prod${p.foto?' cf':''}" data-p="${p.id}">${p.foto?imgFoto(p):emo?`<span class="e">${esc(emoDe(p))}</span>`:''}${esc(p.nome)}<span class="p">${precoTxt(p)}</span>${bq(cont[p.id])}</button>`;
     const top=topIds.map(id=>produtos.find(p=>p.id===id)).filter(Boolean);
@@ -538,7 +545,7 @@ function renderConta(){
   if($('#cTelOk'))$('#cTelOk').onclick=()=>{if(poeTel(c.nome,$('#cTelI').value)){verTel=false;renderConta()}};
   if($('#cFalta'))$('#cFalta').onclick=()=>{$('#fechar').classList.remove('on');abrirPrecos()};
   if($('#cNovo'))$('#cNovo').onclick=()=>abrirPrecos(true);
-  $('#bHist').onclick=()=>{verHist=!verHist;renderConta()};
+  if($('#bHist'))$('#bHist').onclick=()=>{verHist=!verHist;renderConta()};
   $('#sBody').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>lancar(b.dataset.p,!!b.closest('.abre')));
   $('#sBody').querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{
     if(Date.now()-travaCat<600)return; // o 2º toque de um toque duplo cairia na grade que acabou de mudar
@@ -551,11 +558,12 @@ function renderConta(){
     const k=c.itens.map(i=>i.p).lastIndexOf(b.dataset.m);if(k<0)return;evento(c,{t:Date.now(),k:'-',n:c.itens[k].nome});const it=c.itens.splice(k,1)[0];ultimo=null;salvar();renderConta();toast('Tirou 1 '+it.nome);
   });
   $('#bFechar').textContent=falta(c)?'Cobrar '+brl(falta(c)):c.status==='paga'||c.status==='casa'?'Reabrir':ehCasa(c)?'Fechar (casa)':'Fechar conta';
-  $('#bFechar').style.display=(c.status==='aberta'&&!c.itens.length)?'none':'';
+  $('#bFechar').style.display=(c.status==='aberta'&&!c.itens.length)||pagando?'none':'';
+  {const bv=$('#bVolta');bv.textContent=pagando?'← Voltar para a conta':'✓ Pronto';bv.className=pagando?'b1':'b3';bv.style.gridColumn=pagando?'1/3':''} // pagando: "Pronto" não parece confirmar pagamento
   if(fecharAberto())renderFechar();
 }
 function lancar(pid,deCat){
-  const c=aberta, agora=Date.now();if(!c||c.status!=='aberta')return;
+  const c=aberta, agora=Date.now();if(!c||c.status!=='aberta'||fecharAberto())return;
   if(pid===ultimo&&agora-ultimoT<800){toast('Toque duplo ignorado');return}
   const p=produtos.find(x=>x.id===pid);if(!p)return;
   ultimo=pid;ultimoT=agora;
@@ -565,6 +573,7 @@ function lancar(pid,deCat){
   salvar();renderConta();toast('+1 '+p.nome);if(navigator.vibrate)navigator.vibrate(20);
 }
 $('#bVolta').onclick=()=>{
+  if(fecharAberto()){$('#fechar').classList.remove('on');fx=null;renderConta();return} // pagando: só volta para a conta
   const c=aberta;if(c&&c.status==='aberta'&&!c.itens.length){contas=contas.filter(x=>x!==c);salvar()}
   $('#sheet').classList.remove('on');aberta=null;$('#nome').value='';render()};
 const fecharAberto=()=>$('#fechar').classList.contains('on');
@@ -580,40 +589,45 @@ function reabrirConta(c){evento(c,{t:Date.now(),k:'reabriu'});c.status='aberta';
   const pt=(c.extra||[]).filter(x=>x.pt);if(pt.length)c.extra=pt;else delete c.extra; // parte paga antes de fechar continua valendo
   $('#fechar').classList.remove('on');fx=null;salvar();toast('Reaberta');renderConta()}
 /* valor a pagar agora: tudo o que falta, ou a parte (÷N, itens marcados ou valor escrito) */
+/* valor a pagar agora: tudo o que falta, ou a parte (÷N, valor escrito ou itens marcados) */
 function valParte(c){const rs=aPagar(c);if(!fx)return rs;
   if(fx.its)return r2(Math.min(rs,c.itens.filter(i=>fx.its.has(i.u)).reduce((s,i)=>s+i.preco,0)));
   if(fx.n)return r2(rs/Math.max(1,fx.n-fx.feitos));
   const v=numBr(fx.v);return v>0?r2(Math.min(v,rs)):0}
+/* símbolo do Pix (desenho simplificado), branco sobre o botão na cor do Pix */
+const PIX_SVG='<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" fill-rule="evenodd" d="M12 1.2 22.8 12 12 22.8 1.2 12Z M12 7 7 12 12 17 17 12Z"/><path fill="#32BCAD" d="M0 10.7h6.2v2.6H0Z M17.8 10.7H24v2.6h-6.2Z"/></svg>';
+const CARTAO=bg=>`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="4.5" width="21" height="15" rx="2.6" fill="#fff"/><rect x="1.5" y="8" width="21" height="3" fill="${bg}"/><rect x="4.5" y="14.2" width="7" height="2.2" rx="1.1" fill="${bg}"/></svg>`;
+const NOTA='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="6" width="22" height="12" rx="2" fill="#fff"/><circle cx="12" cy="12" r="3.3" fill="#1f5c3a"/><circle cx="5" cy="12" r="1.3" fill="#1f5c3a"/><circle cx="19" cy="12" r="1.3" fill="#1f5c3a"/></svg>';
+const fxInicio=c=>null; // ao fechar: a conta toda; dividir / parte / itens ficam no botão Dividir
 function renderFechar(){
   const c=aberta,f=$('#fechar');if(!c||!fecharAberto())return;
   const ae=document.activeElement;if(ae&&f.contains(ae)&&ae.tagName==='INPUT'&&ae.type!=='checkbox')return; // digitando: não refaz
   c.itens.forEach(i=>{if(!i.u)i.u=uid()});
   const rs=aPagar(c), pg=pagoTot(c), v=valParte(c);
-  const bts=FORMAS.map((k,i)=>`<button class="btn ${['b4','b3','b5','b5'][i]}" data-f="${k}">${cap(fnome(k))} <span class="fv">${brl(v)}</span></button>`).join('');
+  const bts=[['debito','b5',CARTAO('#8a6fd1')],['credito','b6',CARTAO('#4a2a8c')],['pix','bpix',PIX_SVG],['dinheiro','b3',NOTA]].map(([k,cl,ic])=>`<button class="btn fp ${cl}" data-f="${k}"><span class="fn">${ic}${cap(fnome(k))}</span></button>`).join(''); // sem valor no botão: o valor fica uma vez só, em cima
   const troco=`<div class="w troco"><span>Cliente deu (dinheiro)</span><input id="fDeu" data-g="deu" inputmode="decimal" placeholder="R$"><b id="fTr"></b></div>`;
   let h='';
   if(!fx){
-    if(pg&&c.status!=='paga')h+=`<div class="fi w">Já pagou ${brl(pg)} · falta <b>${brl(rs)}</b></div>`;
-
+    h+=`<div class="w ftot"><span>${c.status==='paga'?'Falta cobrar':'A pagar'}</span><b id="fAgora">${brl(v)}</b></div>`+(pg&&c.status!=='paga'?`<div class="w fsub">já pagou ${brl(pg)} de ${brl(total(c))}</div>`:'');
     h+=bts+(c.status!=='paga'?`<button class="btn b1 w" data-x="parte">➗ Dividir / pagar uma parte</button>`:'');
-    h+=c.status==='aberta'?'<button class="btn b2 w" data-f="dev">Ficou devendo</button>':c.status==='paga'?'<button class="btn b1 w" data-x="reabrir">Reabrir a conta</button>':'';
-    h+=troco;
+    h+=c.status==='paga'?'<button class="btn b1 w" data-x="reabrir">Reabrir a conta</button>':'';
+    h+=troco+(c.status==='aberta'?'<button class="btn devm w" data-f="dev">Ficou devendo</button>':'');
   }else{
-    const pagos=new Set(pagsDe(c).flatMap(x=>x.its||[])), livres=c.itens.filter(i=>!pagos.has(i.u));
-    h+=`<div class="fi w">Falta <b>${brl(rs)}</b>${pg?' · já pagou '+brl(pg):''}</div><div class="w dv">${[2,3,4,5].map(n=>`<button class="${fx.n===n?'on':''}" data-n="${n}">÷${n}</button>`).join('')}<button class="${fx.its?'on':''}" data-x="its">Itens</button></div>`;
-    if(fx.n)h+=`<div class="fi w">Pessoa ${fx.feitos+1} de ${fx.n}: <b>${brl(v)}</b></div>`;
-    else if(fx.its)h+=`<div class="w fits">${livres.map(i=>`<label><input type="checkbox" data-it="${i.u}"${fx.its.has(i.u)?' checked':''}>${esc(i.nome)}<b>${brl(i.preco)}</b></label>`).join('')||'<div class="fi">Todos os itens já foram pagos.</div>'}</div>`;
+    h+=`<div class="w fsub" style="margin-top:0">Falta ${brl(rs)}${pg?' · já pagou '+brl(pg):''}</div><div class="w dv"><button class="${!fx.n&&!fx.its?'on':''}" data-x="valor">Valor</button><button class="${fx.its?'on':''}" data-x="its">Itens</button>${[2,3,4].map(n=>`<button class="${fx.n===n?'on':''}" data-n="${n}">÷${n}</button>`).join('')}</div>`;
+    if(fx.n)h+=`<div class="fi w">Dividir igual · pessoa ${fx.feitos+1} de ${fx.n}</div>`;
+    else if(fx.its){const pagos=new Set(pagsDe(c).flatMap(x=>x.its||[])), livres=c.itens.filter(i=>!pagos.has(i.u)).sort((a,b)=>a.t-b.t);
+      h+=`<div class="fi w">Marque o que vai pagar agora:</div><div class="w fits">${livres.map(i=>`<label><input type="checkbox" data-it="${i.u}"${fx.its.has(i.u)?' checked':''}>${esc(i.nome)}<b>${brl(i.preco)}</b></label>`).join('')||'<div class="fi">Todos os itens já foram pagos.</div>'}</div>`}
     else h+=`<div class="w"><input class="fv" id="fV" data-g="fv" inputmode="decimal" placeholder="Quanto vai pagar agora (R$)" value="${esc(fx.v||'')}"></div>`;
-    h+=bts+troco+`<button class="btn b1 w" data-x="volta">← Voltar</button>`;
+    h+=`<div class="w ftot"><span>Pagando agora</span><b id="fAgora">${brl(v)}</b></div>`+bts+troco+`<button class="btn volta w" data-x="volta">← Voltar</button>`;
   }
   f.innerHTML=h;
-  const atual=()=>{const v=valParte(c);f.querySelectorAll('span.fv').forEach(s=>s.textContent=brl(v));const d=numBr($('#fDeu').value);$('#fTr').textContent=d>0?(d>=v?'Troco '+brl(r2(d-v)):'Falta '+brl(r2(v-d))):''};
+  const atual=()=>{const v=valParte(c);$('#fAgora').textContent=brl(v);const d=numBr($('#fDeu').value);$('#fTr').textContent=d>0?(d>=v?'Troco '+brl(r2(d-v)):'Falta '+brl(r2(v-d))):''};
   $('#fDeu').oninput=atual;
   if($('#fV'))$('#fV').oninput=()=>{fx.v=$('#fV').value;atual()};
   f.querySelectorAll('[data-it]').forEach(b=>b.onchange=()=>{b.checked?fx.its.add(b.dataset.it):fx.its.delete(b.dataset.it);atual()});
   f.querySelectorAll('[data-n]').forEach(b=>b.onclick=()=>{fx={n:+b.dataset.n,feitos:0};renderFechar()});
   f.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{const x=b.dataset.x;
-    if(x==='reabrir')reabrirConta(c);else if(x==='parte'){fx={};renderFechar()}else if(x==='its'){fx={its:new Set()};renderFechar()}else if(x==='volta'){fx=null;renderFechar()}});
+    if(x==='reabrir')reabrirConta(c);else if(x==='parte'||x==='valor'){fx={};renderFechar()}else if(x==='its'){fx={its:new Set()};renderFechar()}else if(x==='volta'){fx=null;renderFechar()}});
   f.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>pagar(c,b.dataset.f));
 }
 function pagar(c,k){
@@ -639,7 +653,7 @@ $('#bFechar').onclick=()=>{const c=aberta,f=$('#fechar');
   if((c.status==='paga'&&!falta(c)||c.status==='casa')&&!fecharAberto()){reabrirConta(c);return}
   if(ehCasa(c)){pagar(c,'casa');return} // conta de funcionário: fecha direto como consumo da casa
   fx=null;if(fecharAberto()){f.classList.remove('on');renderConta();return}
-  f.classList.add('on');renderConta()};
+  fx=fxInicio(c);f.classList.add('on');renderConta()};
 $('#nome').oninput=()=>{$('#dup').style.display='none';render()};
 $('#nome').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();criar()}};
 $('#novo').onclick=()=>criar();
