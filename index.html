@@ -108,6 +108,7 @@ a.btn{display:block;text-align:center;text-decoration:none}
 .fechar .fits label{display:flex;gap:10px;align-items:center;padding:7px 2px;font-size:16px;border-bottom:1px solid #eee}.fechar .fits b{margin-left:auto}.fechar .fits input{width:20px;height:20px}
 .fechar input.fv{width:100%;font-size:17px;padding:10px;border:1px solid #ccc;border-radius:10px}
 .troco{display:flex;align-items:center;gap:8px;font-size:15px;color:#555}.troco input{width:110px;font-size:17px;padding:8px;border:1px solid #ccc;border-radius:10px}.troco b{color:#1f5c3a}
+.bprod{width:100%;font-size:17px;padding:11px 12px;border:1px solid #ccc;border-radius:12px;background:#fff;margin-top:6px}
 .cli1{display:inline-block;border:0;background:#eef4f0;color:#1f5c3a;border-radius:10px;padding:6px 10px;font-size:14px;margin:0 6px 10px 0;text-decoration:none}
 a.cobra{flex:none;background:#1f8f4e;color:#fff;border-radius:10px;padding:9px 10px;font-size:14px;font-weight:700;text-decoration:none;white-space:nowrap}
 .acaba{background:#fff3cd;color:#7a5a00;border-radius:12px;padding:10px 12px;margin:8px 12px 4px 40px;font-size:15px;cursor:pointer}
@@ -499,12 +500,17 @@ function htmlHist(c){
     e.k==='pagou'?'<b>pagou '+(e.pt?'parte: ':'')+(e.v?brl(+e.v)+' ':'')+'no '+fnome(e.f)+'</b>':e.k==='devendo'?'<b class="hx">ficou devendo</b>':e.k==='casa'?'<b>consumo da casa</b>':'reabriu a conta';
   return histDe(c).map(e=>`<div class="he"><span>${fmt(e.t)}</span>${txt(e)}</div>`).join('');
 }
+let buscaProd=''; // busca de produto na conta (antes de cadastrar um novo)
+function resBusca(){const q=normal(buscaProd);if(!q)return '';
+  const l=produtos.filter(p=>normal(p.nome).includes(q)).sort((a,b)=>(vendaN[b.id]||0)-(vendaN[a.id]||0)).slice(0,9);
+  return l.length?`<div class="prods" style="margin-top:8px">${l.map(p=>`<button class="prod${p.foto?' cf':''}" data-p="${p.id}">${p.foto?imgFoto(p):`<span class="e">${esc(emoDe(p))}</span>`}${esc(p.nome)}<span class="p">${precoTxt(p)}</span></button>`).join('')}</div>`
+    :'<div class="nota" style="margin:8px 2px">Nenhum produto com esse nome. Cadastre abaixo.</div>'}
 let verHist=false, fx=null, verTel=false; // fx = pagando uma parte: {} valor escrito · {n,feitos} dividir por n · {its:Set} itens marcados
 /* total escondido: o cliente vê a tela, e ver quanto já gastou pode frear o consumo. Só aparece no "Ver total" (some sozinho em 6 s)
  ou na hora de fechar a conta (botões Pix/Dinheiro). */
 let verTot=false, verTotT=null;
 function mostrarTotal(on){clearTimeout(verTotT);verTot=on;if(on)verTotT=setTimeout(()=>{verTot=false;if(aberta)renderConta()},6000);if(aberta)renderConta()}
-function abrir(id){ultimo=null;fx=null;verTel=false;catAberta=null;verHist=false;clearTimeout(verTotT);verTot=false;topIds=maisPedidos();contaVendas();aberta=contas.find(c=>c.id===id);$('#dup').style.display='none';$('#fechar').classList.remove('on');$('#sheet').classList.add('on');renderConta()}
+function abrir(id){ultimo=null;fx=null;verTel=false;buscaProd='';catAberta=null;verHist=false;clearTimeout(verTotT);verTot=false;topIds=maisPedidos();contaVendas();aberta=contas.find(c=>c.id===id);$('#dup').style.display='none';$('#fechar').classList.remove('on');$('#sheet').classList.add('on');renderConta()}
 function renderConta(){
   const c=aberta, g=agrupa(c.itens), trav=c.status!=='aberta', pagando=fecharAberto(); // pagando: tela limpa (só o que pegou + pagamento)
   const ver=verTot||$('#fechar').classList.contains('on');
@@ -537,7 +543,7 @@ function renderConta(){
       const n=g.itens.reduce((s,p)=>s+(cont[p.id]||0),0);
       let b=`<button class="cat${i===ia?' on':''}" data-c="${g.id}"><span class="e">${esc(g.e)}</span>${esc(g.nome)}${g.itens.length===1?`<span class="p">${precoTxt(g.itens[0])}</span>`:''}${bq(n)}</button>`;
       if(i===ins){const a=gs[ia];b+=`<div class="abre">${a.itens.map(p=>btn(p,0)).join('')}</div>`}
-      return b}).join('')}</div><button class="gadd" id="cNovo" style="margin-top:14px">+ Cadastrar produto que faltou</button>`}
+      return b}).join('')}</div><div class="tit" style="margin-top:16px">Buscar produto</div><input id="pBusca" data-g="busca" class="bprod" placeholder="🔍 Nome do produto" autocomplete="off" value="${esc(buscaProd)}"><div id="pRes">${resBusca()}</div><button class="gadd" id="cNovo" style="margin-top:14px">+ Cadastrar produto que faltou</button>`}
   $('#sBody').innerHTML=h;
   $('#sBody').querySelectorAll('[data-ab]').forEach(u=>u.onclick=()=>abrir(u.dataset.ab));
   if($('#cTel'))$('#cTel').onclick=()=>{verTel=true;renderConta();const i=$('#cTelI');if(i)i.focus()};
@@ -547,6 +553,7 @@ function renderConta(){
   if($('#cNovo'))$('#cNovo').onclick=()=>abrirPrecos(true);
   if($('#bHist'))$('#bHist').onclick=()=>{verHist=!verHist;renderConta()};
   $('#sBody').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>lancar(b.dataset.p,!!b.closest('.abre')));
+  if($('#pBusca'))$('#pBusca').oninput=()=>{buscaProd=$('#pBusca').value;$('#pRes').innerHTML=resBusca();$('#pRes').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>lancar(b.dataset.p,false))};
   $('#sBody').querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{
     if(Date.now()-travaCat<600)return; // o 2º toque de um toque duplo cairia na grade que acabou de mudar
     const g=vendaveis().find(x=>x.id===b.dataset.c);if(!g||!g.itens.length)return;
