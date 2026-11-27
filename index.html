@@ -157,7 +157,7 @@ a.cobra{flex:none;background:#1f8f4e;color:#fff;border-radius:10px;padding:9px 1
 <div class="top">
   <div class="cab"><img class="logo" src="logo.png" alt="Centro da Coroa F.C."><b id="dia"></b><button class="ic" id="bNuv">☁</button><button class="ic" id="bResumo">Fechar dia</button><button class="ic" id="bDono">⚙︎</button></div>
   <div class="rl"><div class="res" id="res"></div><button class="ic" id="bPrecos">💲 Preços</button></div>
-  <input id="nome" placeholder="Escreva o nome…" autocomplete="off" autocapitalize="words">
+  <input id="nome" placeholder="Nome ou celular…" autocomplete="off" autocapitalize="words">
   <button class="novo" id="novo"></button>
   <div class="dup" id="dup"></div>
 </div>
@@ -433,7 +433,7 @@ function render(){
   if(q.length>=2){const nq=normal(q), dq=telD(q), ja=new Set(ab.map(c=>normal(c.nome)));
     const sug=(nq||dq.length>=4)?todosClientes().filter(o=>!nomesDe(o.x).some(n=>ja.has(n))&&((nq&&nomesDe(o.x).some(n=>n.includes(nq)))||(dq.length>=4&&telD(o.x.tel).includes(dq)))).sort((a,b)=>b.ult-a.ult).slice(0,5):[];
     if(sug.length)h=`<div class="sep">Clientes</div>`+sug.map(o=>`<div class="linha" data-cn="${esc(o.x.nome)}"><span class="n">${esc(o.x.nome)}<span class="r">${o.x.tel?'📱 final '+telD(o.x.tel).slice(-4)+' · ':''}${o.cs.length?o.cs.length+' conta(s) · última '+dbr(o.cs[0].dia):'sem contas ainda'}${o.dev?' · devendo':''}</span></span></div>`).join('')+(h?'<div class="sep">Contas</div>':'')+h}
-  $('#folha').innerHTML=h||`<div class="vazio">${q?'Ninguém com esse nome hoje.':'Folha em branco. Escreva o primeiro nome lá em cima.'}</div>`;
+  $('#folha').innerHTML=h||`<div class="vazio">${q?(/^[\d\s()+.-]+$/.test(q)?'Ninguém com esse celular. Cadastre o celular na conta do cliente.':'Ninguém com esse nome hoje.'):'Folha em branco. Escreva o primeiro nome lá em cima.'}</div>`;
   if(h&&!q)$('#folha').insertAdjacentHTML('beforeend','<div class="vazio" style="min-height:120px"></div>');
 
   const ac=q?[]:acabando();
@@ -443,7 +443,7 @@ function render(){
   $('#folha').querySelectorAll('a.cobra').forEach(a=>a.onclick=e=>e.stopPropagation()); // abre o WhatsApp, não a conta
   const sd=$('#sepDev');if(sd&&!q)sd.onclick=()=>{verDevendo=!verDevendo;render()};
   const exato=ab.some(c=>normal(c.nome)===normal(q));
-  const b=$('#novo');b.style.display=q&&!exato?'block':'none';b.textContent='+ Novo: '+cap($('#nome').value.trim());
+  const b=$('#novo');b.style.display=q&&!exato&&/\p{L}/u.test(q)?'block':'none'; // só número = busca pelo celular, não cria contab.textContent='+ Novo: '+cap($('#nome').value.trim());
   if(!q)$('#dup').style.display='none';
 }
 
@@ -451,6 +451,7 @@ function render(){
 const mesmo=(a,b)=>{if(normal(a)===normal(b))return true;const x=cliDe(a);return !!x&&x===cliDe(b)}; // mesmo nome, ou nomes da mesma ficha
 function criar(nm){
   const n=cap(String(nm||$('#nome').value).trim());if(!n)return;
+  if(!/\p{L}/u.test(n)){toast('Para abrir conta, escreva o nome',2000);return}
   const iguais=abertas().filter(c=>mesmo(c.nome,n));
   const dev=devendo().filter(c=>mesmo(c.nome,n));
   if(iguais.length||dev.length){perguntarDup(n,iguais,dev);return}
