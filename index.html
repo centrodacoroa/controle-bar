@@ -91,6 +91,14 @@ a.btn{display:block;text-align:center;text-decoration:none}
 .abas{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px 12px 0}
 .abas button{border:0;border-radius:10px;padding:10px;font-size:15px;font-weight:700;background:#eee;color:#555}
 .abas button.on{background:#1f5c3a;color:#fff}
+.abas.t3{grid-template-columns:1fr 1fr 1fr}
+.dmes{display:flex;justify-content:space-between;font-size:14px;text-transform:uppercase;color:#888;margin:16px 0 2px;font-weight:700}
+.dd{border-bottom:1px solid #eee;padding:9px 2px;display:flex;justify-content:space-between;gap:8px;cursor:pointer;font-size:15px}
+.dd small{display:block;color:#777;font-size:13px}.dd .r{text-align:right;white-space:nowrap}
+.dc{border-bottom:1px solid #f0f0f0;padding:5px 0}.dc summary{display:flex;justify-content:space-between;gap:8px;cursor:pointer;list-style:none}
+.dc summary::-webkit-details-marker{display:none}.dc summary small{display:block;color:#777;font-size:13px}
+.dc .it{display:flex;justify-content:space-between;font-size:14px;color:#555;padding:1px 0 1px 14px}
+.gav{display:grid;grid-template-columns:1fr 1fr;gap:8px}.gres{font-size:15px;margin:8px 0 0}
 .est{width:100%;border-collapse:collapse;font-size:15px}.est th{font-size:12px;color:#888;text-transform:uppercase;text-align:right;padding:4px 6px;font-weight:600}
 .est th:first-child,.est td:first-child{text-align:left}.est td{padding:9px 6px;border-bottom:1px solid #eee;text-align:right}
 .est .bx{color:#b3261e;font-weight:700}.est .ok{color:#1f5c3a}.est .nd{color:#aaa}
@@ -156,7 +164,7 @@ a.btn{display:block;text-align:center;text-decoration:none}
 
 <div class="sheet" id="dono"><div class="panel">
   <div class="ph"><h2>Área do dono</h2></div>
-  <div class="abas"><button data-aba="estoque">Estoque</button><button data-aba="produtos">Produtos e preços</button></div>
+  <div class="abas t3"><button data-aba="dias">Dias</button><button data-aba="estoque">Estoque</button><button data-aba="produtos">Produtos</button></div>
   <div class="pb dono" id="dBody"></div>
   <div class="pf" style="grid-template-columns:1fr 1fr"><button class="b1" id="dVolta">Fechar</button><button class="b3" id="dAdd">+ Categoria</button></div>
 </div></div>
@@ -291,6 +299,10 @@ let produtos=cardapio(), cats=CATS0.map(c=>({...c}));
 let sync={ligado:false,desde:0,base:{}};
 let cardV=0, fotosV=FOTOS_V, contas=[], mov=[], aberta=null, db=null, ultimo=null, ultimoT=0, verDevendo=false, catAberta=null, travaCat=0, topIds=[];
 let dia=hoje();
+/* fech = um registro por dia do bar: {dia,t,tot:{n,vend,pix,din,outros,dev,ab,prods},cx?:{troco,ret,mot,cont,esp,t},auto?,arq?}
+ Fica no banco como h:fecha:<dia> (o banco já aceita esse tipo; versões antigas do app ignoram).
+ arq = contas guardadas só no banco (saíram do celular para não lotar a memória): ids + vendas por produto (para o estoque continuar certo) */
+let fech=[], arq={ids:[],vend:{}};
 
 /* Estado salvo sem "cats" = versão antiga: troca os exemplos pelo cardápio sem perder nada.
  - produto com o mesmo nome de um item do cardápio vira esse item (mantém id, estoque e custo; se não era exemplo, mantém o preço do dono)
@@ -317,8 +329,12 @@ function migrar(){
   // v2 (fotos do bar): até a v1 o app gravava '' em quem não tinha foto do app, então nessa subida '' também recebe a foto nova
   if(fotosV<FOTOS_V){produtos.forEach(p=>{if(p.foto===undefined||(fotosV<2&&p.foto==='')){const f=fotoPadrao(p.nome);if(f)p.foto=f}});fotosV=FOTOS_V}
 }
-const estado=()=>({produtos,contas,mov,cats,fotosV,cardV});
-function aplicar(s){contas=s.contas||[];mov=s.mov||[];if(Array.isArray(s.produtos)){fotosV=s.fotosV||0;cardV=s.cardV||0;produtos=s.produtos;cats=Array.isArray(s.cats)?s.cats:undefined}migrar()}
+const estado=()=>({produtos,contas,mov,cats,fotosV,cardV,fech,arq});
+function aplicar(s){contas=s.contas||[];mov=s.mov||[];
+  if(Array.isArray(s.fech)){const n=new Map(fech.map(f=>[f.dia,f]));s.fech.forEach(f=>{if(f&&f.dia)n.set(f.dia,f)});fech=[...n.values()]} // backup sem fechamento não apaga os que existem
+  if(s.arq&&Array.isArray(s.arq.ids)&&s.arq.ids.length>=arq.ids.length)arq={ids:s.arq.ids,vend:s.arq.vend||{}};
+  {const ax=new Set(arq.ids);contas=contas.filter(c=>!ax.has(c.id))} // conta arquivada nunca volta ao celular (o estoque já conta as vendas dela)
+if(Array.isArray(s.produtos)){fotosV=s.fotosV||0;cardV=s.cardV||0;produtos=s.produtos;cats=Array.isArray(s.cats)?s.cats:undefined}migrar()}
 
 const LS='bar_v2';
 const copias=()=>Object.keys(localStorage).filter(x=>x.startsWith('bar_copia_')).sort();
@@ -554,12 +570,16 @@ function abrirResumo(){
   if(acobrar().length)h+=`<div class="aviso">⚠︎ Falta cobrar (item entrou depois do pagamento): ${acobrar().map(c=>esc(c.nome)+' '+brl(falta(c))).join(', ')}.</div>`;
   h+=`<h3>Caixa</h3>${l('Pix',brl(r.pix))}${l('Dinheiro',brl(r.din))}${l('Total recebido',brl(r.pix+r.din),'big')}`;
   if(r.fiadoRec)h+=`<div style="font-size:14px;color:#666">inclui ${brl(r.fiadoRec)} de contas de outros dias pagas hoje</div>`;
+  h+=gavetaHtml(dia);
   h+=`<h3>Vendas de hoje</h3>${l('Clientes',r.n)}${l('Vendido',brl(r.vend))}${l('Ficou devendo hoje',brl(r.novoDev.reduce((s,c)=>s+total(c),0)))}${l('Total devendo (todos os dias)',brl(r.dvTot))}`;
   const pgs=pagsDoDia().sort((a,b)=>(a.t||0)-(b.t||0));
   if(pgs.length)h+=`<h3>Pagamentos</h3>${pgs.map(x=>l((x.t?hora(x.t)+' · ':'')+esc(x.c.nome)+' · '+(x.f==='pix'?'Pix':'dinheiro')+(x.c.dia!==dia?' (conta de '+dbr(x.c.dia)+')':''),brl(x.v))).join('')}`;
   h+=`<h3>Por produto</h3>${r.prods.map(([n,x])=>l(x.q+'× '+esc(n),brl(x.v))).join('')||'<div style="color:#888">nada vendido</div>'}`;
-  $('#rBody').innerHTML=h;
-  const t=`*Bar - resumo ${diaData().toLocaleDateString('pt-BR')}*\nPix: ${brl(r.pix)}\nDinheiro: ${brl(r.din)}\n*Recebido: ${brl(r.pix+r.din)}*\nVendido hoje: ${brl(r.vend)} (${r.n} clientes)\nFicou devendo hoje: ${brl(r.novoDev.reduce((s,c)=>s+total(c),0))}${r.novoDev.length?' ('+r.novoDev.map(c=>c.nome).join(', ')+')':''}\nTotal devendo: ${brl(r.dvTot)}\n\n*Produtos*\n${r.prods.map(([n,x])=>x.q+'x '+n+' = '+brl(x.v)).join('\n')}`;
+  h+=`<button class="btn b1" id="rDias" style="width:100%;margin-top:16px">📅 Ver todos os dias</button>`;
+  $('#rBody').innerHTML=h;ligaGaveta(dia);
+  $('#rDias').onclick=async()=>{$('#resumo').classList.remove('on');if(!await pedirPin())return;donoAba='dias';verDia=null;arqDia=null;$('#dono').classList.add('on');renderDono()};
+  const cx=(fechDe(dia)||{}).cx;
+  const t=`*Bar - resumo ${diaData().toLocaleDateString('pt-BR')}*\nPix: ${brl(r.pix)}\nDinheiro: ${brl(r.din)}\n*Recebido: ${brl(r.pix+r.din)}*\nVendido hoje: ${brl(r.vend)} (${r.n} clientes)\nFicou devendo hoje: ${brl(r.novoDev.reduce((s,c)=>s+total(c),0))}${r.novoDev.length?' ('+r.novoDev.map(c=>c.nome).join(', ')+')':''}\nTotal devendo: ${brl(r.dvTot)}${cx?`\n\n*Gaveta*\nDeveria ter: ${brl(cx.esp)}${cx.cont!=null?`\nContado: ${brl(cx.cont)} (${difTxt(cx.cont-cx.esp)})`:''}${cx.ret?`\nRetiradas: ${brl(cx.ret)}${cx.mot?' - '+cx.mot:''}`:''}`:''}\n\n*Produtos*\n${r.prods.map(([n,x])=>x.q+'x '+n+' = '+brl(x.v)).join('\n')}`;
   $('#rZap').href='https://wa.me/?text='+encodeURIComponent(t);
   $('#resumo').classList.add('on');
 }
@@ -665,8 +685,8 @@ $('#bDono').onclick=async()=>{if(!await pedirPin())return;$('#dono').classList.a
  mov = [{id,tipo:'compra'|'contagem',p,q,custo?,calc?,t}]
  Estoque de um produto = última contagem + compras depois dela − vendido depois dela.
  Produto sem nenhuma compra/contagem fica "não controlado" (mostra —). */
-let donoAba='estoque', ultimaDif=null;
-function vendidos(pid,desde){let n=0;contas.forEach(c=>c.itens.forEach(i=>{if(i.p===pid&&i.t>desde)n++}));return n}
+let donoAba='dias', ultimaDif=null;
+function vendidos(pid,desde){let n=(arq.vend[pid]||[]).filter(t=>t>desde).length;contas.forEach(c=>c.itens.forEach(i=>{if(i.p===pid&&i.t>desde)n++}));return n}
 function estoqueDe(pid){
   const ms=mov.filter(m=>m.p===pid);if(!ms.length)return null;
   const cont=ms.filter(m=>m.tipo==='contagem').sort((a,b)=>b.t-a.t)[0];
@@ -747,10 +767,10 @@ function renderDono(){
   document.querySelectorAll('#dono [data-aba]').forEach(b=>b.classList.toggle('on',b.dataset.aba===donoAba));
   $('#dAdd').style.display=donoAba==='produtos'?'':'none';
   $('#dono .pf').style.gridTemplateColumns=donoAba==='produtos'?'1fr 1fr':'1fr';
-  donoAba==='estoque'?renderEstoque():renderProdutos();
+  donoAba==='dias'?renderDias():donoAba==='estoque'?renderEstoque():renderProdutos();
 }
-document.querySelectorAll('#dono [data-aba]').forEach(b=>b.onclick=()=>{donoAba=b.dataset.aba;renderDono()});
-$('#dVolta').onclick=()=>{$('#dono').classList.remove('on');ultimaDif=null;render();botaoPrecos()};
+document.querySelectorAll('#dono [data-aba]').forEach(b=>b.onclick=()=>{if(b.dataset.aba==='dias'&&donoAba==='dias'){verDia=null;arqDia=null}donoAba=b.dataset.aba;renderDono()});
+$('#dVolta').onclick=()=>{$('#dono').classList.remove('on');verDia=null;arqDia=null;ultimaDif=null;render();botaoPrecos()};
 /* foto tirada no celular (câmera ou galeria): reduz para 300×300 em JPEG (~15 KB) antes de guardar */
 function reduzFoto(arq){return new Promise((ok,erro)=>{const u=URL.createObjectURL(arq), im=new Image();
   im.onload=()=>{const L=300, c=document.createElement('canvas');c.width=c.height=L;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,L,L);
@@ -852,6 +872,116 @@ $('#pVolta').onclick=()=>{if(document.activeElement)document.activeElement.blur(
   $('#precos').classList.remove('on');$('#pForm').innerHTML='';topIds=maisPedidos();aberta?renderConta():render()};
 setTimeout(receberPrecos,300);window.addEventListener('hashchange',receberPrecos);
 
+/* ===== DIAS: fechamentos e o dia completo =====
+ Dia no celular: números calculados das contas. Dia arquivado (contas só no banco): números guardados no fechamento. */
+const sm=a=>Math.round(a.reduce((s,x)=>s+(+x||0),0)*100)/100;
+const pagsDia=(d,cs=contas)=>cs.flatMap(c=>pagsDe(c).filter(x=>x.dia===d).map(x=>({...x,c})));
+function diaTot(d,cs=contas){
+  const dc=cs.filter(c=>c.dia===d), pg=pagsDia(d,cs), g={};
+  dc.forEach(c=>c.itens.forEach(i=>{const x=g[i.nome]=g[i.nome]||[i.nome,0,0];x[1]++;x[2]+=i.preco}));
+  return {n:dc.length,vend:sm(dc.map(total)),pix:sm(pg.filter(x=>x.f==='pix').map(x=>x.v)),din:sm(pg.filter(x=>x.f==='dinheiro').map(x=>x.v)),
+    outros:sm(pg.filter(x=>x.c.dia!==d).map(x=>x.v)),dev:sm(dc.filter(c=>c.status==='devendo').map(total)),ab:dc.filter(c=>c.status==='aberta').length,
+    prods:Object.values(g).sort((a,b)=>b[1]-a[1]).map(x=>[x[0],x[1],Math.round(x[2]*100)/100])};
+}
+const fechDe=d=>fech.find(f=>f.dia===d);
+const totDe=d=>{const f=fechDe(d);return f&&f.arq&&f.tot?f.tot:diaTot(d)};
+const ativ=c=>Math.max(c.t||0,c.abertaEm||0,c.pagoEm||0,...c.itens.map(i=>+i.t||0),...(c.hist||[]).map(e=>+e.t||0),...(c.extra||[]).map(x=>+x.t||0));
+function diasTodos(){const s=new Set();contas.forEach(c=>{s.add(c.dia);pagsDe(c).forEach(x=>x.dia&&s.add(x.dia))});fech.forEach(f=>s.add(f.dia));return [...s].filter(d=>/^\d{4}-\d\d-\d\d$/.test(d||'')).sort().reverse()}
+const DSEM=['domingo','segunda','terça','quarta','quinta','sexta','sábado'], MES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const nomeDia=d=>DSEM[new Date(d+'T12:00:00').getDay()]+' '+dbr(d);
+const difTxt=x=>Math.abs(x)<0.01?'bateu ✓':x>0?'sobrou '+brl(x):'faltou '+brl(-x);
+const numBr=s=>{s=String(s||'').trim().replace(/^R\$\s*/,'');if(!s)return null;if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');const n=Number(s);return isFinite(n)&&n>=0?n:NaN};
+/* gaveta: troco + dinheiro recebido − retiradas = o que deveria ter */
+function gavetaHtml(d){
+  const x=(fechDe(d)||{}).cx||{}, v=k=>x[k]!=null?String(x[k]).replace('.',','):'';
+  return `<h3>Fechar o caixa</h3><div class="cx" data-gav="${d}"><div class="gav"><div><label>Troco no início</label><input data-g="troco" inputmode="decimal" placeholder="R$" value="${v('troco')}"></div><div><label>Retiradas</label><input data-g="ret" inputmode="decimal" placeholder="R$" value="${v('ret')}"></div></div>
+   <label>Motivo das retiradas</label><input data-g="mot" maxlength="200" value="${esc(x.mot||'')}"><label>Contei na gaveta</label><input data-g="cont" inputmode="decimal" placeholder="R$" value="${v('cont')}">
+   <div class="gres"></div><button class="btn b3 gok" style="width:100%;margin-top:10px">${x.t?'Atualizar fechamento':'Guardar fechamento'}</button>${x.t?`<p class="nota">Guardado ${dbr(dstr(new Date(x.t)))} às ${hora(x.t)}.</p>`:''}</div>`;
+}
+function ligaGaveta(d){
+  const B=document.querySelector(`[data-gav="${d}"]`);if(!B)return;const val=k=>B.querySelector(`[data-g=${k}]`).value;
+  const calc=()=>{const din=totDe(d).din,tr=numBr(val('troco'))||0,re=numBr(val('ret'))||0,co=numBr(val('cont')),esp=Math.round((tr+din-re)*100)/100;
+    B.querySelector('.gres').innerHTML=`Deveria ter <b>${brl(esp)}</b><br><small style="color:#777">troco + ${brl(din)} recebidos em dinheiro − retiradas</small>`+(co!=null&&!isNaN(co)?`<br>Contado ${brl(co)}: <b>${difTxt(co-esp)}</b>`:'');return esp};
+  B.querySelectorAll('input').forEach(i=>i.oninput=calc);calc();
+  B.querySelector('.gok').onclick=()=>{const cx={};
+    for(const k of ['troco','ret','cont']){const n=numBr(val(k));if(Number.isNaN(n)){toast('Valor inválido em '+({troco:'troco',ret:'retiradas',cont:'contei'})[k],2500);return}if(n!=null)cx[k]=n}
+    const mot=val('mot').trim().slice(0,200);if(mot)cx.mot=mot;cx.esp=calc();cx.t=Date.now();
+    const f=fechDe(d);guardaFech(d,{tot:f&&f.arq?f.tot:diaTot(d),cx});toast('Fechamento guardado ✓',2500);
+    if($('#resumo').classList.contains('on'))abrirResumo();if($('#dono').classList.contains('on')&&donoAba==='dias')renderDias()};
+}
+function guardaFech(d,o){let f=fechDe(d);if(!f){f={dia:d};fech.push(f)}Object.assign(f,o,{dia:d,t:Date.now()});delete f.auto;salvar();return f}
+/* todo dia que já passou ganha o registro dos totais (só com tudo enviado, para não guardar número incompleto) */
+function autoFech(){
+  const h=hoje(), fal=diasTodos().filter(d=>d<h&&!fechDe(d));if(!fal.length)return;
+  if(sync.ligado&&(falhas||Object.keys(sync.tent||{}).length||pendentes(mapa()).length))return;
+  fal.forEach(d=>fech.push({dia:d,t:Date.now(),tot:diaTot(d),auto:1}));salvar();
+}
+/* conta paga há mais de ARQ_DIAS sai do celular (continua no banco). Só com tudo enviado; nunca aberta, devendo ou com falta */
+const ARQ_DIAS=40;let ultArq=0;
+function arquiva(forca){
+  if(!sync.ligado||falhas||Object.keys(sync.tent||{}).length||(!forca&&Date.now()-ultArq<3600e3))return 0;ultArq=Date.now();
+  const lim=dstr(new Date(Date.now()-VIRA-ARQ_DIAS*864e5)), velho=Date.now()-ARQ_DIAS*864e5, m=mapa();
+  const chaves=c=>['c:'+c.id,...c.itens.map(i=>'i:'+c.id+':'+i.u),...(c.hist||[]).map(e=>'h:'+c.id+':'+e.u)];
+  const A=contas.filter(c=>c!==aberta&&c.status==='paga'&&!falta(c)&&c.dia<lim&&pagsDe(c).every(x=>(x.dia||'')<lim)&&ativ(c)<velho&&chaves(c).every(k=>m[k]&&sync.base[k]===imp(m[k])));
+  if(!A.length)return 0;
+  const ds=new Set();A.forEach(c=>{ds.add(c.dia);pagsDe(c).forEach(x=>x.dia&&ds.add(x.dia))});
+  ds.forEach(d=>{const f=fechDe(d);if(f&&f.arq)return;
+    const ult=Math.max(0,...contas.filter(c=>c.dia===d).map(ativ),...pagsDia(d).map(x=>+x.t||0));
+    const n={dia:d,t:Date.now(),tot:f&&f.tot&&f.t>ult?f.tot:diaTot(d),arq:1};if(f&&f.cx)n.cx=f.cx;if(f)Object.assign(f,n);else fech.push(n)});
+  const ids=new Set(A.map(c=>c.id));
+  A.forEach(c=>{c.itens.forEach(i=>{if(i.p)(arq.vend[i.p]=arq.vend[i.p]||[]).push(+i.t||0)});chaves(c).forEach(k=>{delete sync.base[k];if(sync.tent)delete sync.tent[k]})});
+  arq.ids=arq.ids.concat([...ids]);contas=contas.filter(c=>!ids.has(c.id));
+  Object.keys(arq.vend).forEach(p=>{const ms=mov.filter(x=>x.p===p);if(!ms.length){delete arq.vend[p];return} // produto sem estoque controlado não precisa
+    const ct=Math.max(0,...ms.filter(x=>x.tipo==='contagem').map(x=>x.t));arq.vend[p]=arq.vend[p].filter(t=>t>ct);if(!arq.vend[p].length)delete arq.vend[p]});
+  salvar();return A.length;
+}
+let verDia=null, arqDia=null;
+const lnh=(a,b,cls='')=>`<div class="l ${cls}"><span>${a}</span><b>${b}</b></div>`;
+function renderDias(){
+  if(verDia)return renderUmDia(verDia);
+  const ds=diasTodos();let h='<div class="res-dia">', mes='';
+  if(!ds.length)h+='<p class="nota">Ainda não tem nenhum dia com venda.</p>';
+  ds.forEach(d=>{
+    if(d.slice(0,7)!==mes){mes=d.slice(0,7);const tt=ds.filter(x=>x.startsWith(mes)).map(totDe);
+      h+=`<div class="dmes"><span>${MES[+mes.slice(5)-1]} ${mes.slice(0,4)}</span><span>${brl(sm(tt.map(x=>x.vend)))}</span></div><div class="nota" style="margin:0 0 4px">${tt.filter(x=>x.n).length} dia(s) com venda · recebido ${brl(sm(tt.map(x=>x.pix+x.din)))} (Pix ${brl(sm(tt.map(x=>x.pix)))} · dinheiro ${brl(sm(tt.map(x=>x.din)))})</div>`}
+    const t=totDe(d), f=fechDe(d), cx=f&&f.cx;
+    h+=`<div class="dd" data-dia="${d}"><div><b>${nomeDia(d)}</b>${d===dia?' · hoje':''}<small>${t.n} conta(s) · recebido ${brl(t.pix+t.din)}${t.dev?' · devendo '+brl(t.dev):''}${t.ab?' · '+t.ab+' aberta(s)':''}</small></div>
+      <div class="r"><b>${brl(t.vend)}</b><small>${cx?(cx.cont!=null?'gaveta: '+difTxt(cx.cont-cx.esp):'caixa fechado'):d<dia?'sem fechar o caixa':''}</small></div></div>`});
+  h+=`<p class="nota">Vendido = o que os clientes consumiram nas contas abertas no dia. Recebido = Pix + dinheiro que entrou no dia, inclusive de contas de outros dias.</p></div>`;
+  $('#dBody').innerHTML=h;
+  $('#dBody').querySelectorAll('[data-dia]').forEach(b=>b.onclick=()=>{verDia=b.dataset.dia;arqDia=null;renderDias();$('#dBody').scrollTop=0});
+}
+function renderUmDia(d){
+  const t=totDe(d), f=fechDe(d), fora=arqDia&&arqDia.dia===d?arqDia.contas.filter(c=>!contas.some(x=>x.id===c.id)):[];
+  const cs=contas.concat(fora), dc=cs.filter(c=>c.dia===d).sort((a,b)=>abertaEm(a)-abertaEm(b)), outras=pagsDia(d,cs).filter(x=>x.c.dia!==d);
+  let h=`<button class="btn b1" id="ddVolta" style="width:100%;padding:10px">← Todos os dias</button><div class="res-dia"><h2 style="margin:12px 0 0;font-size:20px">${nomeDia(d)}${d===dia?' (hoje)':''}</h2>`;
+  h+=`<h3>Caixa</h3>${lnh('Pix',brl(t.pix))}${lnh('Dinheiro',brl(t.din))}${lnh('Recebido',brl(t.pix+t.din),'big')}${t.outros?`<div class="nota">inclui ${brl(t.outros)} de contas de outros dias</div>`:''}`;
+  h+=`<h3>Vendas</h3>${lnh('Contas',t.n)}${lnh('Vendido',brl(t.vend))}${lnh('Ficou devendo',brl(t.dev))}${t.ab?lnh('Ainda abertas',t.ab):''}`;
+  if(f&&f.arq)h+=`<div class="aviso ok" style="margin-top:10px">Dia arquivado: os números acima ficaram guardados. As contas pagas saíram do celular e estão no banco.${fora.length?'':' <button class="btn b4" id="ddBaixa" style="width:100%;margin-top:8px;padding:10px">Ver as contas (baixa do banco)</button>'}</div>`;
+  h+=gavetaHtml(d);
+  const st=c=>c.status==='paga'?(c.forma==='pix'?'Pix':'dinheiro')+(c.pagoDia&&c.pagoDia!==d?' em '+dbr(c.pagoDia):''):c.status==='devendo'?'<span style="color:#b3261e">devendo</span>':'aberta';
+  const conta=(c,extra='')=>`<details class="dc"><summary><span>${esc(c.nome)}<small>${extra}${hora(abertaEm(c))}${c.pagoEm?' – '+hora(c.pagoEm):''} · ${st(c)} · ${c.itens.length} item(ns)</small></span><b>${brl(total(c))}</b></summary>
+    ${c.itens.slice().sort((a,b)=>a.t-b.t).map(i=>`<div class="it"><span>${i.t?hora(i.t)+' · ':''}${esc(i.nome)}</span><span>${brl(i.preco)}</span></div>`).join('')||'<div class="it">sem itens</div>'}
+    ${falta(c)?`<div class="it" style="color:#b3261e"><span>falta cobrar</span><span>${brl(falta(c))}</span></div>`:''}${(c.extra||[]).map(x=>`<div class="it"><span>diferença cobrada ${x.dia?dbr(x.dia):''}</span><span>${brl(x.v)}</span></div>`).join('')}</details>`;
+  h+=`<h3>Contas do dia · ${dc.length}</h3>${dc.map(c=>conta(c)).join('')||'<div class="nota">'+(f&&f.arq&&!fora.length?'As contas pagas estão no banco.':'Nenhuma conta.')+'</div>'}`;
+  if(outras.length)h+=`<h3>Contas de outros dias pagas neste dia</h3>${outras.map(x=>lnh(esc(x.c.nome)+' · '+dbr(x.c.dia)+' · '+(x.f==='pix'?'Pix':'dinheiro'),brl(x.v))).join('')}`;
+  h+=`<h3>Por produto</h3>${(t.prods||[]).map(p=>lnh(p[1]+'× '+esc(p[0]),brl(p[2]))).join('')||'<div class="nota">nada vendido</div>'}</div>`;
+  $('#dBody').innerHTML=h;ligaGaveta(d);
+  $('#ddVolta').onclick=()=>{verDia=null;arqDia=null;renderDias()};
+  if($('#ddBaixa'))$('#ddBaixa').onclick=()=>baixaDia(d);
+}
+/* só lê o banco (não grava nada) */
+async function baixaDia(d){
+  if(!chave()){toast('Celular não está ligado ao banco',3000);return}
+  toast('Baixando do banco…',10000);
+  try{let docs=[],desde=0,j;do{j=await rpc(desde,[]);docs=docs.concat(j.docs);if(j.docs.length)desde=j.docs[j.docs.length-1].r}while(j.mais);
+    const ult=new Map();docs.forEach(x=>ult.set(x.k,x));const C={};
+    ult.forEach(x=>{if(x.d||x.k[0]!=='c'||!x.v)return;const id=x.k.slice(2),v=x.v;if(v.dia===d||v.pagoDia===d||(Array.isArray(v.extra)&&v.extra.some(e=>e&&e.dia===d))){const c={id,itens:[]};CAB.forEach(k=>{if(v[k]!==undefined)c[k]=v[k]});if(c.pagoV!==undefined)c.pagoV=+c.pagoV||0;if(c.extra!==undefined)c.extra=Array.isArray(c.extra)?c.extra.filter(e=>e&&typeof e==='object').map(e=>({...e,v:+e.v||0})):[];c.nome=String(c.nome||'');C[id]=c}});
+    ult.forEach(x=>{if(x.d||x.k[0]!=='i'||!x.v)return;const [,c,u]=x.k.split(':');if(C[c])C[c].itens.push({...x.v,u,preco:+x.v.preco||0})});
+    arqDia={dia:d,contas:Object.values(C)};toast('Pronto',1500);if(verDia===d)renderUmDia(d);
+  }catch(e){toast('Sem internet: tente de novo',3000)}
+}
+
 /* ===== ONLINE (Supabase) =====
  O celular continua funcionando sozinho (localStorage). Ligado pelo link secreto (#bar=…), compara o que mudou desde a última
  conversa (sync.base = impressão de cada registro) e manda só isso; recebe o que os outros mudaram.
@@ -874,6 +1004,7 @@ function mapa(){
   contas.forEach(c=>{m['c:'+c.id]=so(c,CAB);
     c.itens.forEach(i=>{if(!i.u)i.u=uid();m['i:'+c.id+':'+i.u]=sem(i,'u')});
     (c.hist||[]).forEach(e=>{if(!e.u)e.u=uid();m['h:'+c.id+':'+e.u]=sem(e,'u')})});
+  fech.forEach(f=>{if(ID.test(f.dia||''))m['h:fecha:'+f.dia]=sem(f,'dia')});
   return m;
 }
 function pendentes(m){
@@ -894,6 +1025,8 @@ function aplicaDoc(k,v,d){
   else if(t==='c'){if(d){contas=contas.filter(x=>x.id!==a);return}
     let c=contas.find(x=>x.id===a);if(!c){c={id:a,itens:[]};contas.push(c)}CAB.forEach(f=>{if(v[f]===undefined)delete c[f];else c[f]=v[f]});c.nome=String(c.nome||'');c.dia=String(c.dia||hoje());
     if(c.pagoV!==undefined)c.pagoV=+c.pagoV||0;if(c.extra!==undefined)c.extra=Array.isArray(c.extra)?c.extra.filter(x=>x&&typeof x==='object').map(x=>({...x,v:+x.v||0})):[]}
+  else if(t==='h'&&a==='fecha'){if(!/^\d{4}-\d\d-\d\d$/.test(b||''))return;if(d){fech=fech.filter(x=>x.dia!==b);return}
+    if(!v||typeof v!=='object')return;const o={...v,dia:b},ix=fech.findIndex(x=>x.dia===b);if(ix>=0)fech[ix]=o;else fech.push(o)}
   else if(t==='i'||t==='h'){const c=contas.find(x=>x.id===a);if(!c||!ID.test(b||''))return;
     if(t==='h'&&!c.hist){if(d)return;c.hist=[]}
     const l=t==='i'?c.itens:c.hist, ix=l.findIndex(x=>x.u===b);
@@ -937,12 +1070,13 @@ async function sincroniza(){
     }
     const mudou=recebe(docs);sync.desde=desde;salvarLocal();falhas=0;erroSync='';ultimoOk=Date.now();
     if(mudou)repinta();
+    try{autoFech();if(arquiva())repinta()}catch(e){}
   }catch(e){falhas++;erroSync=/chave/.test(e.message)?'chave':'rede';salvarLocal()}
   finally{rodando=false;nuvem();if(denovo)agendaSync(300)}
 }
 /* o que mudou aqui enquanto a resposta vinha não é pisado: sobe na próxima */
 function recebe(docs){
-  const m=mapa(), ult=new Map();docs.forEach(x=>ult.set(x.k,x));
+  const m=mapa(), ult=new Map(), ax=new Set(arq.ids);docs.forEach(x=>{if('cih'.includes(x.k[0])&&ax.has(x.k.split(':')[1]))return;ult.set(x.k,x)});
   const l=[...ult.values()].filter(x=>(m[x.k]?imp(m[x.k]):undefined)===sync.base[x.k]&&(x.d?m[x.k]:!m[x.k]||imp(x.v)!==sync.base[x.k]));
   l.sort((a,b)=>'pkcihm'.indexOf(a.k[0])-'pkcihm'.indexOf(b.k[0]));
   l.forEach(x=>aplicaDoc(x.k,x.v,x.d));
@@ -956,7 +1090,9 @@ function repinta(){
   if(aberta&&!contas.includes(aberta)){aberta=null;$('#sheet').classList.remove('on');toast('Esta conta foi apagada em outro celular',3000)}
   if(aberta)renderConta();render();botaoPrecos();
   if($('#precos').classList.contains('on')){if(document.activeElement&&document.activeElement.dataset.pp)filtros();else if(!$('#nNome'))renderPrecos()}
-  if($('#resumo').classList.contains('on'))abrirResumo();
+  const ae=document.activeElement, digita=ae&&ae.dataset&&ae.dataset.g;
+  if($('#resumo').classList.contains('on')&&!digita)abrirResumo();
+  if($('#dono').classList.contains('on')&&donoAba==='dias'&&!digita)renderDias();
 }
 function agendaSync(ms){if(!chave()||!sync.ligado)return;clearTimeout(tSync);tSync=setTimeout(sincroniza,ms)}
 function nuvem(){
@@ -980,10 +1116,11 @@ async function ligar(k,auto){
     if(!auto)localStorage.setItem(CHK,k);
     let docs=[], desde=0, j;do{j=await rpc(desde,[]);docs=docs.concat(j.docs);if(j.docs.length)desde=j.docs[j.docs.length-1].r}while(j.mais);
     try{localStorage.setItem('bar_antes_online',JSON.stringify(estado()))}catch(e){}
-    if(!manda){contas=[];mov=[];if(aberta){aberta=null;$('#sheet').classList.remove('on')}}
+    if(!manda){contas=[];mov=[];arq={ids:[],vend:{}};if(aberta){aberta=null;$('#sheet').classList.remove('on')}}
     if(!mandaP)produtos.forEach(p=>p.preco=0);
     sync={ligado:true,desde,base:{}};
-    const vivos=docs.filter(x=>!x.d), mortos=docs.filter(x=>x.d);
+    const ax=new Set(arq.ids), deArq=x=>'cih'.includes(x.k[0])&&ax.has(x.k.split(':')[1]);
+    const vivos=docs.filter(x=>!x.d&&!deArq(x)), mortos=docs.filter(x=>x.d&&!deArq(x));
     if(vivos.some(x=>x.k[0]==='p')){
       const loc=produtos, padrao=new Set(['nbeatsgt',...CARD0.map((x,i)=>'m'+(i+1)),...Object.values(NOVOS2).flat().map(x=>'n'+normal(Array.isArray(x)?x[0]:x).replace(/ /g,''))]);
       const rem=new Map(vivos.filter(x=>x.k[0]==='p').map(x=>[x.k.slice(2),x.v])), porNome=new Map([...rem].map(([i,v])=>[normal(v.nome),i])), troca={};
@@ -1066,6 +1203,7 @@ async function abrirEntrada(d){
 
 setInterval(()=>{if(hoje()!==dia&&!aberta)render()},60000);
 render();botaoPrecos();
+setTimeout(()=>{if(!sync.ligado)try{autoFech()}catch(e){}},1500);
 
 /* proteção dos dados no aparelho */
 try{if(!localStorage.getItem('bar_copia_'+hoje()))salvarCopiaSeguranca()}catch(e){}
